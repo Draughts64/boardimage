@@ -1,0 +1,17 @@
+[package]
+name = "boardimage"
+version = "0.1.0"
+edition = "2021"
+description = "Draughts board rendering service: PNG/WebP/SVG images and GIF replays (PDN variants, per-square notation, themes)"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/Draughts64/boardimage"
+
+# See SPEC.md for the full technical specification.
+# Dependencies are added per implementation stage (SPEC.md §10):
+# stage 1 spike: tiny-skia, gifski; stage 4: axum/actix + webp; stage 5b: ab_glyph.
+
+[dependencies]
+
+[profile.release]
+lto = true
+strip = true
