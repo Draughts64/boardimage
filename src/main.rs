@@ -1,36 +1,36 @@
-// boardimage — draughts board rendering service (SPEC.md).
-// Stage 0 skeleton: zero-dependency HTTP listener with /healthz,
-// so the repo builds and the compose healthcheck has something to talk to.
-// Real rendering arrives per SPEC.md §10 (spike first: sprites + gifski).
+// boardimage — web service + CLI (SPEC.md).
+//   boardimage serve [--bind 127.0.0.1:8080]   (default)
+//   boardimage render --fen ... --out file.png [png|svg|gif]
 
-use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use boardimage::{cli, metrics::Metrics, server, VERSION};
+use std::sync::Arc;
 
 fn main() {
-    let bind = std::env::var("BIND").unwrap_or_else(|_| "127.0.0.1:8080".into());
-    let listener = TcpListener::bind(&bind).expect("bind");
-    eprintln!("boardimage stage-0 listening on http://{bind}");
-    for stream in listener.incoming() {
-        if let Ok(stream) = stream {
-            handle(stream);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.first().map(String::as_str) {
+        Some("render") => {
+            if let Err(e) = cli::run_render(&args[1..]) {
+                eprintln!("render error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some("serve") | None => {
+            let bind = args
+                .iter()
+                .position(|a| a == "--bind")
+                .and_then(|i| args.get(i + 1).cloned())
+                .or_else(|| std::env::var("BIND").ok())
+                .unwrap_or_else(|| "127.0.0.1:8080".into());
+            let m = Arc::new(Metrics::new());
+            eprintln!("boardimage v{VERSION}");
+            if let Err(e) = server::run(&bind, m) {
+                eprintln!("server error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(other) => {
+            eprintln!("unknown command: {other}\nusage: boardimage [serve [--bind ADDR] | render --fen FEN --out FILE]");
+            std::process::exit(2);
         }
     }
-}
-
-fn handle(mut stream: TcpStream) {
-    let mut reader = BufReader::new(stream.try_clone().expect("clone"));
-    let mut request_line = String::new();
-    if reader.read_line(&mut request_line).is_err() {
-        return;
-    }
-    let path = request_line.split_whitespace().nth(1).unwrap_or("/");
-    let (status, body) = match path {
-        "/healthz" => ("200 OK", "ok"),
-        _ => ("404 Not Found", "not found (stage 0 — see SPEC.md)"),
-    };
-    let _ = write!(
-        stream,
-        "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    );
 }
