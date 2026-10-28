@@ -11,7 +11,69 @@ use crate::gif::{Frame, GifParams};
 use crate::render::{png, svg, Caption, Notation, Params};
 use crate::{fen, theme};
 
+const VALUE_FLAGS: &[&str] = &[
+    "--out",
+    "--fen",
+    "--size",
+    "--game-type",
+    "--variant",
+    "--board-size",
+    "--board-height",
+    "--numbering",
+    "--theme",
+    "--light",
+    "--dark",
+    "--last-move",
+    "--arrows",
+    "--squares",
+    "--white",
+    "--black",
+    "--comment",
+    "--notation",
+    "--margin",
+    "--quality",
+    "--delay-ms",
+];
+const BOOL_FLAGS: &[&str] = &[
+    "--flip",
+    "--flat",
+    "--transparent",
+    "--border",
+    "--no-border",
+    "--light-squares",
+];
+
+/// Unknown --flags are a hard error: a silently ignored typo twice
+/// produced "almost right" renders (--arrows, --margin).
+fn validate_args(args: &[String]) -> Result<(), String> {
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a.starts_with("--") {
+            if VALUE_FLAGS.contains(&a.as_str()) {
+                if i + 1 >= args.len() {
+                    return Err(format!("{a} requires a value"));
+                }
+                i += 2;
+                continue;
+            }
+            if BOOL_FLAGS.contains(&a.as_str()) {
+                i += 1;
+                continue;
+            }
+            return Err(format!(
+                "unknown flag {a} (value flags: {} | bool flags: {})",
+                VALUE_FLAGS.join(" "),
+                BOOL_FLAGS.join(" ")
+            ));
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
 pub fn run_render(args: &[String]) -> Result<(), String> {
+    validate_args(args)?;
     let get = |name: &str| {
         args.iter()
             .position(|a| a == name)
@@ -210,5 +272,41 @@ fn mk_params(
         border,
         transparent: args.contains(&"--transparent".to_string()),
         caption,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unknown_flag_is_rejected() {
+        let args = vec!["--fen".into(), "W:W1:B2".into(), "--arrow".into()];
+        assert!(run_render(&args)
+            .unwrap_err()
+            .contains("unknown flag --arrow"));
+        assert!(
+            validate_args(&["--out".to_string()]).is_err(),
+            "missing value"
+        );
+    }
+
+    #[test]
+    fn smoke_render_writes_png() {
+        let dir = std::env::temp_dir().join(format!("bicli-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("s.png");
+        run_render(&[
+            "--fen".into(),
+            "W:W31:B1".into(),
+            "--out".into(),
+            out.to_string_lossy().into_owned(),
+            "--size".into(),
+            "128".into(),
+        ])
+        .unwrap();
+        let data = std::fs::read(&out).unwrap();
+        assert_eq!(&data[..4], &[0x89, b'P', b'N', b'G']);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

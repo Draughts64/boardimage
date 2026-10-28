@@ -12,6 +12,7 @@ pub mod metrics;
 pub mod openapi;
 pub mod render;
 pub mod server;
+pub mod text;
 pub mod theme;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

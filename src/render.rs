@@ -547,22 +547,6 @@ fn draw_border_raster(p: &Params, pm: &mut Pixmap) {
     }
 }
 
-/// Cut the string (with an ellipsis) so its rendered width fits max_px.
-fn truncate(s: &str, max_px: f32, px: f32) -> String {
-    if glyph::text_width(s) as f32 * px <= max_px {
-        return s.to_string();
-    }
-    let mut out: String = s.chars().take(2).collect();
-    for c in s.chars().skip(2) {
-        let t = format!("{out}{c}");
-        if glyph::text_width(&t) as f32 * px > max_px - px {
-            return format!("{out}.");
-        }
-        out = t;
-    }
-    out
-}
-
 fn draw_text(pm: &mut Pixmap, s: &str, x: f32, y: f32, px: f32, color: [u8; 3]) {
     // 3x5 bitmap glyphs; px = pixel size of one bitmap pixel
     for (gx, gy) in glyph::text_pixels(s) {
@@ -581,41 +565,46 @@ fn draw_caption_raster(p: &Params, cap: &Caption, pm: &mut Pixmap) {
     let h = p.caption_h() as f32;
     let w = p.total_w() as f32;
     rect(pm, 0.0, 0.0, w, h, &paint([0x26, 0x24, 0x21], 255));
-    // 3x5 glyphs: one bitmap pixel is `px`, so a char is 5*px tall —
-    // the bar must fit a names row AND a smaller comment row below it
-    let px = (h / 18.0).clamp(1.0, 12.0);
-    let half = w / 2.0 - px * 2.0;
+    // names/comment render with the embedded Unicode font (Cyrillic etc.);
+    // the bar fits a names row and a smaller comment row below it
+    let fs = (h * 0.30).clamp(9.0, 30.0);
+    let half = w / 2.0 - fs * 0.6;
+    let baseline = h * 0.16 + fs * 0.78;
     if !cap.white.is_empty() || !cap.black.is_empty() {
-        let white = truncate(&cap.white, half, px);
-        let black = truncate(&cap.black, half, px);
-        draw_text(
+        let white = crate::text::truncate(&cap.white, half, fs);
+        let black = crate::text::truncate(&cap.black, half, fs);
+        crate::text::draw(
             pm,
             &white,
             p.margin as f32,
-            h * 0.16,
-            px,
+            baseline,
+            fs,
             [0xff, 0xff, 0xff],
+            255,
         );
-        let bw = glyph::text_width(&black) as f32 * px;
-        draw_text(
+        let bw = crate::text::width(&black, fs);
+        crate::text::draw(
             pm,
             &black,
             w - p.margin as f32 - bw,
-            h * 0.16,
-            px,
+            baseline,
+            fs,
             [0xff, 0xff, 0xff],
+            255,
         );
     }
     if !cap.comment.is_empty() {
-        let comment = truncate(&cap.comment, w - px * 4.0, px * 0.8);
-        let cw = glyph::text_width(&comment) as f32 * px * 0.8;
-        draw_text(
+        let cfs = fs * 0.78;
+        let comment = crate::text::truncate(&cap.comment, w - fs, cfs);
+        let cw = crate::text::width(&comment, cfs);
+        crate::text::draw(
             pm,
             &comment,
             (w - cw) / 2.0,
-            h * 0.60,
-            px * 0.8,
+            h * 0.62 + cfs * 0.78,
+            cfs,
             [0xbb, 0xb3, 0xa8],
+            255,
         );
     }
 }
@@ -632,31 +621,27 @@ pub fn svg(p: &Params) -> String {
     if let Some(cap) = &p.caption {
         let ch = p.caption_h();
         o += &format!(r##"<rect width="{w}" height="{ch}" fill="#262421"/>"##);
-        let px = (ch as f32 / 18.0).clamp(1.0, 12.0);
-        let half = w as f32 / 2.0 - px * 2.0;
+        let fs = (ch as f32 * 0.30).clamp(9.0, 30.0);
+        let half = w as f32 / 2.0 - fs * 0.6;
+        let baseline = ch as f32 * 0.16;
         if !cap.white.is_empty() {
-            let white = truncate(&cap.white, half, px);
-            o += &svg_text(&white, p.margin as f32, ch as f32 * 0.16, px * 5.0, None);
+            let white = crate::text::truncate(&cap.white, half, fs);
+            o += &svg_text(&white, p.margin as f32, baseline, fs, None);
         }
         if !cap.black.is_empty() {
-            let black = truncate(&cap.black, half, px);
-            let bw = glyph::text_width(&black) as f32 * px * 1.25;
-            o += &svg_text(
-                &black,
-                w as f32 - p.margin as f32 - bw,
-                ch as f32 * 0.16,
-                px * 5.0,
-                None,
-            );
+            let black = crate::text::truncate(&cap.black, half, fs);
+            let bw = crate::text::width(&black, fs);
+            o += &svg_text(&black, w as f32 - p.margin as f32 - bw, baseline, fs, None);
         }
         if !cap.comment.is_empty() {
-            let comment = truncate(&cap.comment, w as f32 - px * 4.0, px * 0.8);
-            let cw = glyph::text_width(&comment) as f32 * px * 1.0;
+            let cfs = fs * 0.78;
+            let comment = crate::text::truncate(&cap.comment, w as f32 - fs, cfs);
+            let cw = crate::text::width(&comment, cfs);
             o += &svg_text(
                 &comment,
                 (w as f32 - cw) / 2.0,
-                ch as f32 * 0.60,
-                px * 4.0,
+                ch as f32 * 0.62,
+                cfs,
                 Some("#bbb3a8"),
             );
         }
@@ -752,7 +737,7 @@ pub fn svg(p: &Params) -> String {
                 }
             }
         }
-        let (fill, stroke) = if white {
+        let (face, stroke) = if white {
             ("#ffffff", "#000000")
         } else {
             ("#1a1a1a", "#dfdfdf")
@@ -763,7 +748,17 @@ pub fn svg(p: &Params) -> String {
         } else {
             &[0.0, -0.06]
         };
-        for &ro in rings {
+        // wide_crown wall like the raster path: gradient rings below the face
+        let n = rings.len();
+        for (i, &ro) in rings.iter().enumerate() {
+            let fill = if i + 1 < n {
+                let (lo, hi) = if white { (0x7f_u8, 0xff) } else { (0x00, 0x9f) };
+                let t = i as u16 * (hi as u16 - lo as u16) / (n - 1) as u16 + lo as u16;
+                let t = t as u8;
+                format!("#{t:02x}{t:02x}{t:02x}")
+            } else {
+                face.to_string()
+            };
             o += &format!(
                 r##"<circle cx="{}" cy="{}" r="{}" fill="{fill}" stroke="{stroke}" stroke-width="{}"/>"##,
                 fmt(cx),
@@ -773,6 +768,15 @@ pub fn svg(p: &Params) -> String {
             );
         }
         if piece.kind.is_king() {
+            if white {
+                o += &format!(
+                    r##"<circle cx="{}" cy="{}" r="{}" fill="{face}" stroke="{stroke}" stroke-width="{}"/>"##,
+                    fmt(cx),
+                    fmt(cy - 0.14 * c),
+                    fmt(r),
+                    fmt(c * 0.012)
+                );
+            }
             o += &svg_crown(cx, cy, c, r);
         }
         o += "</g>";

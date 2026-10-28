@@ -294,7 +294,7 @@ impl Server {
         path: &str,
         q: &HashMap<String, String>,
     ) -> Result<(&'static str, Vec<u8>), String> {
-        let bdef = self.resolve_board(q)?;
+        let bdef = Self::resolve_board(q)?;
         let fen_s = q.get("fen").ok_or("fen required")?;
         let pos = fen::parse(fen_s, &bdef).map_err(|e| e.to_string())?;
         let size: u32 = q
@@ -396,7 +396,7 @@ impl Server {
         }
     }
 
-    fn resolve_board(&self, q: &HashMap<String, String>) -> Result<board::BoardDef, String> {
+    fn resolve_board(q: &HashMap<String, String>) -> Result<board::BoardDef, String> {
         let resolved = q
             .get("gameType")
             .and_then(|g| board::from_game_type_str(g))
@@ -563,7 +563,69 @@ pub fn parse_arrows(s: &str, b: &board::BoardDef) -> Vec<Arrow> {
                 Some(c @ ('G' | 'B' | 'R' | 'Y')) => (Some(c), &item[1..]),
                 _ => (None, item),
             };
-            board::parse_move_squares(rest, b).map(|(from, to)| Arrow { from, to, color })
+            // from-to pair, or a lone square = circle marker on that cell
+            board::parse_move_squares(rest, b)
+                .map(|(from, to)| Arrow { from, to, color })
+                .or_else(|| {
+                    board::parse_square(rest, b).map(|sq| Arrow {
+                        from: sq,
+                        to: sq,
+                        color,
+                    })
+                })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn q(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn board_defaults_height_follows_width() {
+        let def = Server::resolve_board(&q(&[("boardSize", "8")])).unwrap();
+        assert_eq!((def.width, def.height), (8, 8));
+        assert_eq!(def.numbering, 2, "engine canon default");
+        let def = Server::resolve_board(&q(&[])).unwrap();
+        assert_eq!((def.width, def.height), (10, 10));
+    }
+
+    #[test]
+    fn game_type_tag_string_resolves() {
+        let def = Server::resolve_board(&q(&[("gameType", "21,B,8,8,N1,0")])).unwrap();
+        assert_eq!((def.width, def.height), (8, 8));
+        assert_eq!(def.numbering, 2);
+        let def = Server::resolve_board(&q(&[("gameType", "22,W,8,8,N2,1")])).unwrap();
+        assert!(def.light_squares);
+    }
+
+    #[test]
+    fn overrides_apply() {
+        let def = Server::resolve_board(&q(&[
+            ("boardSize", "8"),
+            ("lightSquares", "true"),
+            ("numbering", "1"),
+            ("allSquares", "true"),
+        ]))
+        .unwrap();
+        assert!(def.light_squares && def.all_squares && def.numbering == 1);
+    }
+
+    #[test]
+    fn arrows_and_squares_parsers() {
+        let b = board::from_game_type(20).unwrap().0;
+        let a = parse_arrows("G3228,R0622,c3-b4,44,99-99", &b);
+        assert_eq!(a.len(), 4, "99-99 dropped, circle + algebraic ok");
+        assert_eq!(a[0].color, Some('G'));
+        let sq = parse_squares("46:0.8,12,bad", &b);
+        assert_eq!(sq.len(), 2);
+        assert!((sq[0].1 - 0.8).abs() < 1e-6);
+    }
 }
