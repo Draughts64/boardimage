@@ -94,4 +94,100 @@ fn golden_gif_sizes() {
     .unwrap();
     assert_eq!(&data[..6], b"GIF89a");
     assert!(data.len() < 500 * 1024, "GIF too big: {}B", data.len());
+    walk_gif_blocks(&data);
+}
+
+#[test]
+fn golden_gif_comment_is_structurally_valid() {
+    use boardimage::gif::{encode, Frame, GifParams};
+    let (bdef, _) = boardimage::board::from_game_type(20).unwrap();
+    let frames: Vec<Frame> = (0..3)
+        .map(|i| Frame {
+            fen: if i % 2 == 0 {
+                "W:W31-50:B1-20".into()
+            } else {
+                "W:W31-49:B1-20".into()
+            },
+            last_move: None,
+        })
+        .collect();
+    let data = encode(
+        &GifParams {
+            board: bdef,
+            size: 256,
+            theme: theme::default_theme(),
+            flat: false,
+            flipped: false,
+            delay_ms: 500,
+            caption: None,
+            comment: "Tournament 2026".into(),
+        },
+        &frames,
+    )
+    .unwrap();
+    // the comment must sit AFTER the Logical Screen Descriptor (+GCT),
+    // never between the header and the LSD (that corrupts the file)
+    let comment_at = data
+        .windows(2)
+        .position(|w| w == [0x21, 0xFE])
+        .expect("comment extension present");
+    let packed = data[10];
+    let lsd_end = 6
+        + 7
+        + if packed & 0x80 != 0 {
+            3 * (1usize << ((packed & 0x07) + 1))
+        } else {
+            0
+        };
+    assert!(
+        comment_at >= lsd_end,
+        "comment at {comment_at} < lsd_end {lsd_end}"
+    );
+    walk_gif_blocks(&data);
+}
+
+/// Walk every GIF block; the file must parse cleanly to the trailer
+/// (frames, delays and extensions all reachable).
+fn walk_gif_blocks(data: &[u8]) {
+    assert_eq!(&data[..6], b"GIF89a");
+    let packed = data[10];
+    let gct = if packed & 0x80 != 0 {
+        3 * (1usize << ((packed & 0x07) + 1))
+    } else {
+        0
+    };
+    let mut p = 6 + 7 + gct;
+    let mut frames = 0usize;
+    let mut comments = 0usize;
+    while p < data.len() {
+        match data[p] {
+            0x21 => {
+                let label = data[p + 1];
+                let mut q = p + 2;
+                while data[q] != 0 {
+                    q += 1 + data[q] as usize;
+                }
+                comments += usize::from(label == 0xFE);
+                p = q + 1;
+            }
+            0x2C => {
+                frames += 1;
+                let lct_packed = data[p + 9];
+                let mut q = p + 10;
+                if lct_packed & 0x80 != 0 {
+                    q += 3 * (1usize << ((lct_packed & 0x07) + 1));
+                }
+                q += 1; // LZW min code size
+                while data[q] != 0 {
+                    q += 1 + data[q] as usize;
+                }
+                p = q + 1;
+            }
+            0x3B => break, // trailer
+            other => panic!("invalid GIF block 0x{other:02x} at offset {p}"),
+        }
+    }
+    assert_eq!(data[p], 0x3B, "must end at the trailer");
+    assert!(frames >= 1);
+    assert!(comments <= 2, "ours + gifski's own watermark");
 }

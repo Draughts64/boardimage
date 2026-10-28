@@ -98,19 +98,31 @@ pub fn encode(params: &GifParams, frames: &[Frame]) -> Result<Vec<u8>, String> {
     if data.is_empty() {
         return Err("gif writer produced no data".into());
     }
-    // GIF Comment Extension right after the header (SPEC §4.5: the
-    // comment travels inside the file metadata).
+    // GIF Comment Extension (SPEC §4.5: the comment travels inside the
+    // file metadata). Per GIF89a the Logical Screen Descriptor (and the
+    // global color table, when present) MUST immediately follow the
+    // header, so the comment is inserted after LSD+GCT, never between
+    // header and LSD (that made strict viewers reject the file).
     let data = if params.comment.is_empty() {
         data
     } else {
-        let mut out = data[..6].to_vec(); // GIF89a
+        let lsd_end = {
+            let packed = data[10]; // LSD packed field
+            let gct = if packed & 0x80 != 0 {
+                3 * (1usize << ((packed & 0x07) + 1))
+            } else {
+                0
+            };
+            6 + 7 + gct
+        };
+        let mut out = data[..lsd_end].to_vec();
         out.extend_from_slice(&[0x21, 0xFE]); // extension + comment label
         for chunk in params.comment.as_bytes().chunks(255) {
             out.push(chunk.len() as u8);
             out.extend_from_slice(chunk);
         }
         out.push(0); // block terminator
-        out.extend_from_slice(&data[6..]);
+        out.extend_from_slice(&data[lsd_end..]);
         out
     };
     Ok(data)
