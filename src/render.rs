@@ -447,6 +447,22 @@ fn draw_overlays_raster(p: &Params, pm: &mut Pixmap) {
     }
 }
 
+/// Cut the string (with an ellipsis) so its rendered width fits max_px.
+fn truncate(s: &str, max_px: f32, px: f32) -> String {
+    if glyph::text_width(s) as f32 * px <= max_px {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(2).collect();
+    for c in s.chars().skip(2) {
+        let t = format!("{out}{c}");
+        if glyph::text_width(&t) as f32 * px > max_px - px {
+            return format!("{out}.");
+        }
+        out = t;
+    }
+    out
+}
+
 fn draw_text(pm: &mut Pixmap, s: &str, x: f32, y: f32, px: f32, color: [u8; 3]) {
     // 3x5 bitmap glyphs; px = pixel size of one bitmap pixel
     for (gx, gy) in glyph::text_pixels(s) {
@@ -465,34 +481,40 @@ fn draw_caption_raster(p: &Params, cap: &Caption, pm: &mut Pixmap) {
     let h = p.caption_h() as f32;
     let w = p.total_w() as f32;
     rect(pm, 0.0, 0.0, w, h, &paint([0x26, 0x24, 0x21], 255));
-    let fs = (h * 0.28).clamp(4.0, 16.0);
+    // 3x5 glyphs: one bitmap pixel is `px`, so a char is 5*px tall —
+    // the bar must fit a names row AND a smaller comment row below it
+    let px = (h / 18.0).clamp(1.0, 12.0);
+    let half = w / 2.0 - px * 2.0;
     if !cap.white.is_empty() || !cap.black.is_empty() {
+        let white = truncate(&cap.white, half, px);
+        let black = truncate(&cap.black, half, px);
         draw_text(
             pm,
-            &cap.white,
+            &white,
             p.margin as f32,
-            h * 0.30,
-            fs,
+            h * 0.16,
+            px,
             [0xff, 0xff, 0xff],
         );
-        let bw = glyph::text_width(&cap.black) as f32 * fs;
+        let bw = glyph::text_width(&black) as f32 * px;
         draw_text(
             pm,
-            &cap.black,
+            &black,
             w - p.margin as f32 - bw,
-            h * 0.30,
-            fs,
+            h * 0.16,
+            px,
             [0xff, 0xff, 0xff],
         );
     }
     if !cap.comment.is_empty() {
-        let cw = glyph::text_width(&cap.comment) as f32 * fs;
+        let comment = truncate(&cap.comment, w - px * 4.0, px * 0.8);
+        let cw = glyph::text_width(&comment) as f32 * px * 0.8;
         draw_text(
             pm,
-            &cap.comment,
+            &comment,
             (w - cw) / 2.0,
-            h * 0.55,
-            fs * 0.8,
+            h * 0.60,
+            px * 0.8,
             [0xbb, 0xb3, 0xa8],
         );
     }
@@ -510,17 +532,32 @@ pub fn svg(p: &Params) -> String {
     if let Some(cap) = &p.caption {
         let ch = p.caption_h();
         o += &format!(r##"<rect width="{w}" height="{ch}" fill="#262421"/>"##);
-        let fs = (ch as f32 * 0.28).clamp(4.0, 16.0);
+        let px = (ch as f32 / 18.0).clamp(1.0, 12.0);
+        let half = w as f32 / 2.0 - px * 2.0;
         if !cap.white.is_empty() {
-            o += &svg_text(&cap.white, p.margin as f32, ch as f32 * 0.30, fs);
+            let white = truncate(&cap.white, half, px);
+            o += &svg_text(&white, p.margin as f32, ch as f32 * 0.16, px * 5.0, None);
         }
         if !cap.black.is_empty() {
-            let bw = glyph::text_width(&cap.black) as f32 * fs;
+            let black = truncate(&cap.black, half, px);
+            let bw = glyph::text_width(&black) as f32 * px * 1.25;
             o += &svg_text(
-                &cap.black,
+                &black,
                 w as f32 - p.margin as f32 - bw,
-                ch as f32 * 0.30,
-                fs,
+                ch as f32 * 0.16,
+                px * 5.0,
+                None,
+            );
+        }
+        if !cap.comment.is_empty() {
+            let comment = truncate(&cap.comment, w as f32 - px * 4.0, px * 0.8);
+            let cw = glyph::text_width(&comment) as f32 * px * 1.0;
+            o += &svg_text(
+                &comment,
+                (w as f32 - cw) / 2.0,
+                ch as f32 * 0.60,
+                px * 4.0,
+                Some("#bbb3a8"),
             );
         }
     }
@@ -709,10 +746,12 @@ pub fn svg(p: &Params) -> String {
     o
 }
 
-fn svg_text(s: &str, x: f32, y: f32, fs: f32) -> String {
+fn svg_text(s: &str, x: f32, y: f32, fs: f32, color: Option<&str>) -> String {
+    // fs is the font size (= char height); y is the row top
     format!(
-        r##"<text x="{x}" y="{}" font-size="{fs}" fill="#fff" font-family="sans-serif">{}</text>"##,
+        r##"<text x="{x}" y="{}" font-size="{fs}" fill="{}" font-family="sans-serif">{}</text>"##,
         y + fs,
+        color.unwrap_or("#fff"),
         escape(s)
     )
 }
