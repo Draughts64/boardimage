@@ -75,7 +75,9 @@ pub fn parse(fen: &str, b: &crate::board::BoardDef) -> Result<Position, &'static
             if item.is_empty() {
                 continue; // empty side list ("B") or trailing comma
             }
-            let (kind, tok) = match item.chars().next().unwrap().to_ascii_uppercase() {
+            // prefixes are UPPERCASE (K/G/P); lowercase k/g are file
+            // letters of algebraic names ("g3" is a square, not a ghost)
+            let (kind, tok) = match item.chars().next().unwrap() {
                 'K' => (Kind::King, &item[1..]),
                 'G' => (Kind::GhostMan, &item[1..]),
                 'P' => (Kind::GhostKing, &item[1..]),
@@ -172,6 +174,17 @@ mod tests {
         // engine-compatible numbers: a1=29, b8=1, c3=22
         assert!(p.white.iter().any(|&Piece { square, .. }| square == 29));
         assert!(p.black.iter().any(|&Piece { square, .. }| square == 1));
+        // g-file squares must be MEN (not the G ghost prefix), and no
+        // piece of this FEN may be a ghost
+        assert!(p
+            .white
+            .iter()
+            .any(|&p| p.square == 24 && p.kind == Kind::Man)); // g3
+        assert!(p
+            .black
+            .iter()
+            .any(|&p| p.square == 8 && p.kind == Kind::Man)); // g7
+        assert!(!p.pieces().any(|(_, p)| p.kind.is_ghost()));
         let kc3 = p
             .black
             .iter()
@@ -187,12 +200,14 @@ mod tests {
         assert!(parse("W:W46,a1:B1", &b).is_ok());
         // unknown turn colour
         assert!(parse("?:Wa1:Bb8", &eng8()).is_ok());
-        // lowercase everything
-        assert!(parse("w:wa1,g1:bb8,kb8", &eng8()).is_ok());
+        // lowercase turn and side markers; piece prefixes stay UPPERCASE
+        // (lowercase k/g are file letters)
+        assert!(parse("w:Wa1,g1:Bb8,Kb8", &eng8()).is_ok());
+        assert!(parse("W:Wkc3:B1", &eng8()).is_err());
         // empty side list
         let p = parse("W:W31,32:B", &b).unwrap();
         assert_eq!(p.black.len(), 0);
-        // ghost prefixes
+        // ghost prefixes (uppercase); lowercase g/k are file letters
         let p = parse("W:W46,K47,G48,P49:B1,2", &b).unwrap();
         assert!(p.white[1].kind.is_king());
         assert!(p.white[2].kind.is_ghost());
