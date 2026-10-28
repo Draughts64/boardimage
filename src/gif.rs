@@ -47,7 +47,7 @@ pub fn encode(params: &GifParams, frames: &[Frame]) -> Result<Vec<u8>, String> {
     let settings = gifski::Settings {
         width: Some(params.size),
         height: Some(params.size + caption_h),
-        fast: true,
+        fast: false,
         ..Default::default()
     };
     let (collector, writer) = gifski::new(settings).map_err(|e| e.to_string())?;

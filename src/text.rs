@@ -46,14 +46,20 @@ pub fn draw(
             );
             if let Some(outlined) = font.outline_glyph(g) {
                 any = true;
+                // draw() yields coords RELATIVE to the glyph's bounding
+                // box - offset them onto the canvas (ab_glyph docs)
+                let b = outlined.px_bounds();
+                let (ox, oy) = (b.min.x.floor() as i32, b.min.y.floor() as i32);
                 outlined.draw(|gx, gy, cov| {
-                    if gx >= w || gy >= h || cov <= 0.0 {
+                    let gx = ox + gx as i32;
+                    let gy = oy + gy as i32;
+                    if gx < 0 || gy < 0 || gx >= w as i32 || gy >= h as i32 || cov <= 0.0 {
                         return;
                     }
                     // blend into the premultiplied RGBA8 bytes directly
                     let a = (cov * alpha as f32).min(1.0) * 255.0;
                     let data = pm.data_mut();
-                    let o = ((gy * w + gx) * 4) as usize;
+                    let o = ((gy as u32 * w + gx as u32) * 4) as usize;
                     let blend = |d: f32, c: u8| {
                         let s = c as f32 * a / 255.0; // premultiplied source
                         let out = s + d * (1.0 - a / 255.0);
