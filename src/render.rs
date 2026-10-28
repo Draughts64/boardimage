@@ -109,7 +109,7 @@ impl Params {
             .as_ref()
             .is_some_and(|c| !c.white.is_empty() || !c.black.is_empty())
         {
-            self.size / 6
+            self.size / 5
         } else {
             0
         }
@@ -567,9 +567,9 @@ fn draw_caption_raster(p: &Params, cap: &Caption, pm: &mut Pixmap) {
     rect(pm, 0.0, 0.0, w, h, &paint([0x26, 0x24, 0x21], 255));
     // names/comment render with the embedded Unicode font (Cyrillic etc.);
     // the bar fits a names row and a smaller comment row below it
-    let fs = (h * 0.30).clamp(9.0, 30.0);
+    let fs = (h * 0.34).clamp(10.0, 34.0);
     let half = w / 2.0 - fs * 0.6;
-    let baseline = h * 0.16 + fs * 0.78;
+    let baseline = h * 0.14 + fs * 0.8;
     if !cap.white.is_empty() || !cap.black.is_empty() {
         let white = crate::text::truncate(&cap.white, half, fs);
         let black = crate::text::truncate(&cap.black, half, fs);
@@ -621,9 +621,9 @@ pub fn svg(p: &Params) -> String {
     if let Some(cap) = &p.caption {
         let ch = p.caption_h();
         o += &format!(r##"<rect width="{w}" height="{ch}" fill="#262421"/>"##);
-        let fs = (ch as f32 * 0.30).clamp(9.0, 30.0);
+        let fs = (ch as f32 * 0.34).clamp(10.0, 34.0);
         let half = w as f32 / 2.0 - fs * 0.6;
-        let baseline = ch as f32 * 0.16;
+        let baseline = ch as f32 * 0.14;
         if !cap.white.is_empty() {
             let white = crate::text::truncate(&cap.white, half, fs);
             o += &svg_text(&white, p.margin as f32, baseline, fs, None);

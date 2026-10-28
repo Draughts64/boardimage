@@ -203,7 +203,7 @@ fn golden_caption_bar_above_board() {
         comment: "Championship 2026 R7".into(),
     });
     let pm = raster(&p);
-    let cap_h = 256 / 6;
+    let cap_h = 256 / 5;
     assert_eq!((pm.width(), pm.height()), (256, 256 + cap_h));
     // the bar strip at the very top is the caption background
     let cap = pm.pixel(128, 2).unwrap();

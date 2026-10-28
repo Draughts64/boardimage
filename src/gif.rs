@@ -41,7 +41,7 @@ pub fn encode(params: &GifParams, frames: &[Frame]) -> Result<Vec<u8>, String> {
         return Err("no frames".into());
     }
     let caption_h = match &params.caption {
-        Some(c) if !c.white.is_empty() || !c.black.is_empty() => params.size / 6,
+        Some(c) if !c.white.is_empty() || !c.black.is_empty() => params.size / 5,
         _ => 0,
     };
     let settings = gifski::Settings {
