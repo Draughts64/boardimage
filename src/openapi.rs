@@ -23,8 +23,8 @@ pub fn json() -> String {
   "components": {
     "responses": { "BadRequest": { "description": "Невалидный параметр (invalid fen / invalid boardsize / fen required / …)" } },
     "parameters": {
-      "Fen": { "name": "fen", "in": "query", "required": true, "schema": { "type": "string" }, "example": "W:W31-50:B1-20", "description": "Шашечный FEN: turn:белые:чёрные; диапазоны через '-', K=король, G/P=призрачные" },
-      "BoardSize": { "name": "boardSize", "in": "query", "schema": { "type": "integer", "default": 10, "enum": [8, 10, 12] }, "description": "Ширина доски (чётная 2..16)" },
+      "Fen": { "name": "fen", "in": "query", "required": true, "schema": { "type": "string" }, "example": "W:Wa3,g3,b2:Bb8,Kc3", "description": "Шашечный FEN PDN 3.0: turn(W|B|?):W<клетки>:B<клетки>. Клетки числовые (31, диапазоны 31-50) ИЛИ алгебраические (a1, Kc3), можно вперемешку. K=король, G/P=призрачные, суффиксы :H0:F1 движка пропускаются. Пример: W:W31-50:B1-20" },
+      "BoardSize": { "name": "boardSize", "in": "query", "schema": { "type": "integer", "default": 10, "enum": [8, 10, 12] }, "description": "Ширина доски (чётная 2..16); высота по умолчанию равна ширине" },
       "BoardHeight": { "name": "boardHeight", "in": "query", "schema": { "type": "integer" }, "description": "Высота для неквадратных досок (Спанциретти 10×8)" },
       "Size": { "name": "size", "in": "query", "schema": { "type": "integer", "default": 360, "minimum": 16, "maximum": 1024 } },
       "Quality": { "name": "quality", "in": "query", "schema": { "type": "integer", "default": 85, "minimum": 1, "maximum": 100 }, "description": "WebP; 100 = lossless" },
@@ -33,10 +33,11 @@ pub fn json() -> String {
       "Squares": { "name": "squares", "in": "query", "schema": { "type": "string", "example": "12,19:0.8" }, "description": "CSV клетка[:alpha] — подсветка с интенсивностью" },
       "Orientation": { "name": "orientation", "in": "query", "schema": { "type": "string", "enum": ["white", "black"], "default": "white" } },
       "LightSquares": { "name": "lightSquares", "in": "query", "schema": { "type": "boolean", "default": false }, "description": "Рабочие клетки светлые (итальянские/испанские)" },
-      "GameType": { "name": "gameType", "in": "query", "schema": { "type": "integer", "enum": [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 40, 41, 96, 97, 98] }, "description": "PDN GameType (22=italian, 27=canadian 12×12, 41=spanciretti 10×8, 96-98=наши)" },
+      "AllSquares": { "name": "allSquares", "in": "query", "schema": { "type": "boolean", "default": false }, "description": "Игра на всех клетках (турецкие шашки); все клетки нумеруются" },
+      "GameType": { "name": "gameType", "in": "query", "schema": { "type": "integer", "enum": [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 40, 41, 96, 97, 98] }, "description": "PDN GameType: число (20, 22=italian, 27=canadian 12×12, 30=turkish все клетки, 41=spanciretti 10×8, 96-98=наши) ИЛИ полный тег '21,B,8,8,N1,0' (тип,старт,ширина,высота,нотация+нумерация,инверсия)" },
       "Variant": { "name": "variant", "in": "query", "schema": { "type": "string", "enum": ["standard", "english", "italian", "pool", "spanish", "russian", "brazilian", "canadian", "portuguese", "czech", "turkish", "thai", "frisian", "spanciretti", "breakthrough", "frysk", "antidraughts"] } },
       "Notation": { "name": "notation", "in": "query", "schema": { "type": "string", "enum": ["none", "numeric", "algebraic", "coords"], "default": "none" }, "description": "numeric: номер на каждой нумеруемой клетке (все 1..50 сразу); coords: a1 на каждой клетке" },
-      "Numbering": { "name": "numbering", "in": "query", "schema": { "type": "integer", "minimum": 0, "maximum": 3, "default": 0 }, "description": "PDN: 0 низ-слева, 1 низ-справа, 2 верх-слева (итал.), 3 верх-справа" },
+      "Numbering": { "name": "numbering", "in": "query", "schema": { "type": "integer", "minimum": 0, "maximum": 3 }, "description": "Абсолютное начало клетки 1: 0 низ-слева, 1 низ-справа, 2 верх-слева (канон движка/FMJD — по умолчанию), 3 верх-справа" },
       "PieceStyle": { "name": "pieceStyle", "in": "query", "schema": { "type": "string", "enum": ["classic", "flat"], "default": "classic" } },
       "Theme": { "name": "theme", "in": "query", "schema": { "type": "string", "enum": ["default", "lidraughts-brown", "lidraughts-blue", "green", "marble", "wood"], "default": "lidraughts-brown" } },
       "White": { "name": "white", "in": "query", "schema": { "type": "string" }, "description": "Имя белых — включает полосу подписи" },
@@ -50,8 +51,9 @@ pub fn json() -> String {
         "boardSize": { "type": "integer", "default": 10 },
         "boardHeight": { "type": "integer" },
         "lightSquares": { "type": "boolean" },
-        "numbering": { "type": "integer" },
-        "gameType": { "type": "integer" },
+        "numbering": { "type": "integer", "default": 2 },
+        "allSquares": { "type": "boolean" },
+        "gameType": { "type": "string", "description": "число или полный PDN-тег '21,B,8,8,N1,0'" },
         "variant": { "type": "string" },
         "size": { "type": "integer", "default": 360, "maximum": 640 },
         "theme": { "type": "string" },
@@ -108,10 +110,10 @@ mod tests {
         let v: serde_json::Value =
             serde_json::from_str(&super::json()).expect("openapi.json must be valid JSON");
         assert!(v["paths"]["/board.png"].is_object());
-        assert!(v["components"]["parameters"]["Fen"]["example"]
+        assert!(v["components"]["parameters"]["Fen"]["description"]
             .as_str()
             .unwrap()
-            .contains("W31-50"));
+            .contains("PDN 3.0"));
         assert!(
             v["components"]["schemas"]["GifRequest"]["properties"]["frames"]["maxItems"] == 500
         );

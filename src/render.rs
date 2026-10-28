@@ -395,8 +395,7 @@ fn draw_overlays_raster(p: &Params, pm: &mut Pixmap) {
             let fs = (s * 0.20).clamp(6.0, 20.0);
             for x in 0..p.board.width {
                 for y in 0..p.board.height {
-                    let letter = (b'a' + (x as u8 % 26)) as char;
-                    let label = format!("{}{}", letter, y + 1);
+                    let label = p.board.algebraic(x, y);
                     let (sx, sy) = (p.sx(x) + s * 0.06, p.sy(y) + s * 0.06);
                     let dark_visual = (x + y) % 2 == 0;
                     let col = if dark_visual {
@@ -411,7 +410,7 @@ fn draw_overlays_raster(p: &Params, pm: &mut Pixmap) {
         Notation::Algebraic => {
             let fs = (s * 0.24).clamp(7.0, 26.0);
             for x in 0..p.board.width {
-                let letter = (b'a' + (x as u8 % 26)) as char;
+                let letter = p.board.file_letter(x);
                 let sx = p.sx(x) + s / 2.0 - fs * 0.35;
                 let sy = if p.flipped {
                     p.margin as f32 + p.size as f32 + fs * 0.9

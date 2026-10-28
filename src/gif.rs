@@ -59,7 +59,7 @@ pub fn encode(params: &GifParams, frames: &[Frame]) -> Result<Vec<u8>, String> {
 
     let mut ts = 0.0f64;
     for (i, f) in frames.iter().enumerate() {
-        let pos = fen::parse(&f.fen, params.board.max_square()).map_err(|e| e.to_string())?;
+        let pos = fen::parse(&f.fen, &params.board).map_err(|e| e.to_string())?;
         let p = Params {
             pos,
             board: params.board,

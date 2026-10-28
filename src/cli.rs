@@ -1,7 +1,9 @@
-// CLI: `boardimage render` — render to a file without the server (SPEC.md).
-// Example:
+// CLI: `boardimage render` — render to a file without the server.
+// Examples:
 //   boardimage render --fen "W:W31-50:B1-20" --out start.png
-//   boardimage render --game-type 25 --fen ... --notation numeric --out r.png
+//   boardimage render --game-type 21 --fen "W:Wa1,c1:Bb8,d8" --out e.svg
+//   boardimage render --game-type "21,B,8,8,N1,0" --fen ... --out e.png
+//   boardimage render --variant russian --notation numeric --out r.png --fen ...
 //   boardimage render --fen a.fen --fen b.fen --out replay.gif --delay-ms 800
 
 use crate::board;
@@ -29,23 +31,45 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(512)
         .clamp(16, 1024);
-    let (bdef, _) = get("--game-type")
-        .and_then(|g| g.parse().ok())
-        .and_then(board::from_game_type)
-        .or_else(|| get("--variant").and_then(|v| board::from_variant(&v)))
+    let (mut bdef, _, tag_notation) = get("--game-type")
+        .and_then(|g| board::from_game_type_str(&g))
+        .or_else(|| {
+            get("--variant").and_then(|v| board::from_variant(&v).map(|(d, n)| (d, n, None)))
+        })
         .unwrap_or((
             board::BoardDef {
                 width: 10,
                 height: 10,
                 light_squares: false,
-                numbering: 0,
+                numbering: 2,
+                all_squares: false,
             },
             "standard",
+            None,
         ));
+    let bw = get("--board-size").and_then(|s| s.parse::<u16>().ok());
+    let bh = get("--board-height").and_then(|s| s.parse::<u16>().ok());
+    for (v, dim) in [(bw, 0u8), (bh.or(bw), 1)] {
+        if let Some(v) = v.filter(|v| (2..=16).contains(v) && v.is_multiple_of(2)) {
+            if dim == 0 {
+                bdef.width = v;
+            } else {
+                bdef.height = v;
+            }
+        }
+    }
+    if let Some(n) = get("--numbering").and_then(|s| s.parse::<u8>().ok()) {
+        if n <= 3 {
+            bdef.numbering = n;
+        }
+    }
+    if args.contains(&"--light-squares".to_string()) {
+        bdef.light_squares = true;
+    }
     let th = get("--theme")
         .and_then(|t| theme::by_name(&t))
         .unwrap_or_else(theme::default_theme);
-    let last_move = get("--last-move").and_then(|s| parse_lm(&s, bdef.max_square()));
+    let last_move = get("--last-move").and_then(|s| board::parse_move_squares(&s, &bdef));
     let caption = {
         let w = get("--white").unwrap_or_default();
         let b = get("--black").unwrap_or_default();
@@ -59,7 +83,12 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
         Some("numeric") => Notation::Numeric,
         Some("algebraic") => Notation::Algebraic,
         Some("coords") => Notation::Coords,
-        _ => Notation::None,
+        _ => match tag_notation {
+            // PDN GameType tag: A = algebraic labels, N/S = numeric
+            Some('A') => Notation::Algebraic,
+            Some('N') | Some('S') => Notation::Numeric,
+            _ => Notation::None,
+        },
     };
 
     let ext = out.rsplit('.').next().unwrap_or("");
@@ -87,12 +116,12 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
             std::fs::write(&out, data).map_err(|e| e.to_string())?;
         }
         "svg" => {
-            let pos = fen::parse(fens.first().unwrap(), bdef.max_square())?;
+            let pos = fen::parse(fens.first().unwrap(), &bdef)?;
             let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
             std::fs::write(&out, svg(&p)).map_err(|e| e.to_string())?;
         }
         _ => {
-            let pos = fen::parse(fens.first().unwrap(), bdef.max_square())?;
+            let pos = fen::parse(fens.first().unwrap(), &bdef)?;
             let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
             std::fs::write(&out, png(&p)?).map_err(|e| e.to_string())?;
         }
@@ -127,14 +156,4 @@ fn mk_params(
         transparent: args.contains(&"--transparent".to_string()),
         caption,
     }
-}
-
-fn parse_lm(s: &str, max: u16) -> Option<(u16, u16)> {
-    if s.len() < 4 || s.len() > 6 || !s.len().is_multiple_of(2) {
-        return None;
-    }
-    let h = s.len() / 2;
-    let a: u16 = s[..h].parse().ok()?;
-    let b: u16 = s[h..].parse().ok()?;
-    (a >= 1 && b >= 1 && a <= max && b <= max).then_some((a, b))
 }

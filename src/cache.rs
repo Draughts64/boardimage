@@ -130,6 +130,10 @@ impl Cache {
     pub fn len(&self) -> usize {
         self.mem.lock().unwrap().map.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 // ── tiny SHA-256 (public-domain style, compact) ─────────────────────────

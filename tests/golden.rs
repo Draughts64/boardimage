@@ -6,7 +6,7 @@ use boardimage::{board, fen, theme};
 fn params(fen: &str, gt: u32, size: u32) -> Params {
     let (bdef, _) = board::from_game_type(gt).unwrap();
     Params {
-        pos: fen::parse(fen, bdef.max_square()).unwrap(),
+        pos: fen::parse(fen, &bdef).unwrap(),
         board: bdef,
         size,
         theme: theme::default_theme(),

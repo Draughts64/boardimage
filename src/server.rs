@@ -27,9 +27,12 @@ struct GifRequest {
     board_height: Option<u16>,
     #[serde(default)]
     light_squares: bool,
-    #[serde(default)]
+    #[serde(default = "d_numbering")]
     numbering: u8,
-    game_type: Option<u32>,
+    #[serde(default)]
+    all_squares: bool,
+    #[serde(default, deserialize_with = "de_num_or_str")]
+    game_type: Option<String>,
     variant: Option<String>,
     #[serde(default = "d_size")]
     size: u32,
@@ -58,22 +61,28 @@ struct GifFrame {
 fn d_size() -> u32 {
     360
 }
-fn d_delay() -> u32 {
-    700
+
+fn d_numbering() -> u8 {
+    2
 }
 
-fn parse_last_move(s: &str, max: u16) -> Option<(u16, u16)> {
-    let l = s.len();
-    if !(4..=6).contains(&l) || !l.is_multiple_of(2) {
-        return None;
+// accept gameType as JSON number (20) or string ("20" / "21,B,8,8,N1,0")
+fn de_num_or_str<'de, D>(d: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+    match Value::deserialize(d)? {
+        Value::Null => Ok(None),
+        Value::String(s) => Ok(Some(s)),
+        Value::Number(n) => Ok(Some(n.to_string())),
+        _ => Err(serde::de::Error::custom(
+            "gameType must be a string or number",
+        )),
     }
-    let a: u16 = s[..l / 2].parse().ok()?;
-    let b: u16 = s[l / 2..].parse().ok()?;
-    if (1..=max).contains(&a) && (1..=max).contains(&b) {
-        Some((a, b))
-    } else {
-        None
-    }
+}
+fn d_delay() -> u32 {
+    700
 }
 
 pub fn run(bind: &str, metrics: Arc<Metrics>, cache: Arc<Cache>) -> std::io::Result<()> {
@@ -286,9 +295,8 @@ impl Server {
         q: &HashMap<String, String>,
     ) -> Result<(&'static str, Vec<u8>), String> {
         let bdef = self.resolve_board(q)?;
-        let max = bdef.max_square();
         let fen_s = q.get("fen").ok_or("fen required")?;
-        let pos = fen::parse(fen_s, max).map_err(|e| e.to_string())?;
+        let pos = fen::parse(fen_s, &bdef).map_err(|e| e.to_string())?;
         let size: u32 = q
             .get("size")
             .and_then(|s| s.parse().ok())
@@ -309,20 +317,25 @@ impl Server {
             last_move: q
                 .get("lastMove")
                 .or(q.get("lastmove"))
-                .and_then(|s| parse_last_move(s, max)),
+                .and_then(|s| board::parse_move_squares(s, &bdef)),
             squares: q
                 .get("squares")
-                .map(|s| parse_squares(s, max))
+                .map(|s| parse_squares(s, &bdef))
                 .unwrap_or_default(),
             arrows: q
                 .get("arrows")
-                .map(|s| parse_arrows(s, max))
+                .map(|s| parse_arrows(s, &bdef))
                 .unwrap_or_default(),
             notation: match q.get("notation").map(|s| s.as_str()) {
                 Some("numeric") => Notation::Numeric,
                 Some("algebraic") => Notation::Algebraic,
                 Some("coords") => Notation::Coords,
-                _ => Notation::None,
+                _ => match q.get("gameType").and_then(|g| board::from_game_type_str(g)) {
+                    // PDN GameType tag: A = algebraic labels, N/S = numeric
+                    Some((_, _, Some('A'))) => Notation::Algebraic,
+                    Some((_, _, Some('N') | Some('S'))) => Notation::Numeric,
+                    _ => Notation::None,
+                },
             },
             margin: q
                 .get("margin")
@@ -357,29 +370,42 @@ impl Server {
     fn resolve_board(&self, q: &HashMap<String, String>) -> Result<board::BoardDef, String> {
         let resolved = q
             .get("gameType")
-            .and_then(|g| g.parse().ok())
-            .and_then(board::from_game_type)
-            .or_else(|| q.get("variant").and_then(|v| board::from_variant(v)));
+            .and_then(|g| board::from_game_type_str(g))
+            .or_else(|| {
+                q.get("variant")
+                    .and_then(|v| board::from_variant(v))
+                    .map(|(d, n)| (d, n, None))
+            });
         let mut def = match resolved {
-            Some((d, _)) => d,
-            None => board::BoardDef {
-                width: q
+            Some((d, _, _)) => d,
+            None => {
+                // the monolith sends boardSize (width) only; height
+                // defaults to the width so boardSize=8 yields 8x8
+                let w = q
                     .get("boardSize")
                     .or(q.get("boardsize"))
                     .and_then(|s| s.parse().ok())
                     .filter(|v| *v >= 2 && *v <= 16 && v % 2 == 0)
-                    .unwrap_or(10),
-                height: q
-                    .get("boardHeight")
-                    .and_then(|s| s.parse().ok())
-                    .filter(|v| *v >= 2 && *v <= 16 && v % 2 == 0)
-                    .unwrap_or(10),
-                light_squares: false,
-                numbering: 0,
-            },
+                    .unwrap_or(10);
+                board::BoardDef {
+                    width: w,
+                    height: q
+                        .get("boardHeight")
+                        .or(q.get("boardheight"))
+                        .and_then(|s| s.parse().ok())
+                        .filter(|v| *v >= 2 && *v <= 16 && v % 2 == 0)
+                        .unwrap_or(w),
+                    light_squares: false,
+                    numbering: 2,
+                    all_squares: false,
+                }
+            }
         };
         if let Some(ls) = q.get("lightSquares") {
             def.light_squares = ls == "true" || ls == "1";
+        }
+        if let Some(asq) = q.get("allSquares") {
+            def.all_squares = asq == "true" || asq == "1";
         }
         if let Some(n) = q.get("numbering").and_then(|s| s.parse().ok()) {
             if n <= 3 {
@@ -411,7 +437,9 @@ impl Server {
             let size = req.size.clamp(16, 640);
             let (bdef, _) = req
                 .game_type
-                .and_then(board::from_game_type)
+                .as_deref()
+                .and_then(board::from_game_type_str)
+                .map(|(d, n, _)| (d, n))
                 .or_else(|| req.variant.as_deref().and_then(board::from_variant))
                 .unwrap_or_else(|| {
                     let w = req.board_size.unwrap_or(10);
@@ -432,6 +460,7 @@ impl Server {
                             height: ch,
                             light_squares: req.light_squares,
                             numbering: req.numbering.min(3),
+                            all_squares: req.all_squares,
                         },
                         "standard",
                     )
@@ -447,7 +476,7 @@ impl Server {
                 .map(|f| Frame {
                     last_move: f
                         .last_move
-                        .and_then(|s| parse_last_move(&s, bdef.max_square())),
+                        .and_then(|s| board::parse_move_squares(&s, &bdef)),
                     fen: f.fen,
                 })
                 .collect();
@@ -485,23 +514,19 @@ impl Server {
     }
 }
 
-fn parse_squares(s: &str, max: u16) -> Vec<(u16, f32)> {
+fn parse_squares(s: &str, b: &board::BoardDef) -> Vec<(u16, f32)> {
     s.split(',')
         .filter_map(|item| {
             let (sq, alpha) = match item.split_once(':') {
                 Some((a, b)) => (a, b.parse::<f32>().unwrap_or(0.5)),
                 None => (item, 0.5),
             };
-            sq.trim()
-                .parse::<u16>()
-                .ok()
-                .filter(|v| (1..=max).contains(v))
-                .map(|v| (v, alpha.clamp(0.0, 1.0)))
+            board::parse_square(sq, b).map(|v| (v, alpha.clamp(0.0, 1.0)))
         })
         .collect()
 }
 
-fn parse_arrows(s: &str, max: u16) -> Vec<Arrow> {
+fn parse_arrows(s: &str, b: &board::BoardDef) -> Vec<Arrow> {
     s.split(',')
         .filter(|i| !i.trim().is_empty())
         .filter_map(|item| {
@@ -509,21 +534,7 @@ fn parse_arrows(s: &str, max: u16) -> Vec<Arrow> {
                 Some(c @ ('G' | 'B' | 'R' | 'Y')) => (Some(c), &item[1..]),
                 _ => (None, item),
             };
-            let l = rest.len();
-            if !(4..=6).contains(&l) || l % 2 != 0 {
-                return None;
-            }
-            let a: u16 = rest[..l / 2].parse().ok()?;
-            let b: u16 = rest[l / 2..].parse().ok()?;
-            if (1..=max).contains(&a) && (1..=max).contains(&b) {
-                Some(Arrow {
-                    from: a,
-                    to: b,
-                    color,
-                })
-            } else {
-                None
-            }
+            board::parse_move_squares(rest, b).map(|(from, to)| Arrow { from, to, color })
         })
         .collect()
 }
