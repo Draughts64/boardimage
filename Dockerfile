@@ -3,11 +3,11 @@
 FROM rust:1-alpine AS builder
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
-# Pre-build the dep tree for layer caching (empty src placeholder trick).
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
 COPY src ./src
-COPY tests ./tests 2>/dev/null || true
-RUN touch src/main.rs && cargo build --release
+COPY tests ./tests
+# NOTE: the classic empty-crate dep-cache trick breaks bin->lib (the
+# placeholder lib gets cached without the real modules) — build plainly.
+RUN cargo build --release && strip target/release/boardimage
 
 FROM alpine:3.20
 RUN addgroup -S boardimage && adduser -S boardimage -G boardimage
