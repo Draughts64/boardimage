@@ -214,13 +214,78 @@ fn golden_caption_bar_above_board() {
         .pixel((1.5 * cell) as u32, (cap_h as f32 + 0.5 * cell) as u32)
         .unwrap();
     let (r, g, b) = (px.red(), px.green(), px.blue());
-    assert!(r < 80 && g < 80 && b < 80, "piece hidden by caption bar: {r},{g},{b}");
+    assert!(
+        r < 80 && g < 80 && b < 80,
+        "piece hidden by caption bar: {r},{g},{b}"
+    );
     // and the strip just above the board (bottom of the caption) must
     // not contain piece pixels either
-    let strip = pm.pixel((1.5 * cell) as u32, (cap_h - 3) as u32).unwrap();
+    let strip = pm.pixel((1.5 * cell) as u32, cap_h - 3).unwrap();
     assert_eq!(
         (strip.red(), strip.green(), strip.blue()),
         (0x26, 0x24, 0x21),
         "caption bar leaks onto the board"
     );
+}
+
+#[test]
+fn golden_custom_theme_from_dir() {
+    use boardimage::render::{raster, Caption};
+    use boardimage::theme;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static SEQ: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "boardimage-theme-test-{}-{}",
+        std::process::id(),
+        SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
+    let theme_dir = dir.join("spritestest");
+    std::fs::create_dir_all(&theme_dir).unwrap();
+    std::fs::write(
+        theme_dir.join("theme.json"),
+        r##"{"light":"#101010","dark":"#303030","pieces":{"wm":"wm.svg","bm":"bm.svg"}}"##,
+    )
+    .unwrap();
+    std::fs::write(
+        theme_dir.join("wm.svg"),
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#00ff00"/></svg>"##,
+    )
+    .unwrap();
+    std::fs::write(
+        theme_dir.join("bm.svg"),
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#ff0080"/></svg>"##,
+    )
+    .unwrap();
+    let loaded = theme::load_dir(dir.to_str().unwrap());
+    assert!(loaded >= 1);
+    let t = theme::by_name("spritestest").expect("custom theme registered");
+    assert_eq!(t.dark, [0x30, 0x30, 0x30]);
+
+    let mut p = params("W:W46:B5", 20, 200);
+    p.theme = t;
+    let pm = raster(&p);
+    let cell = 200.0 / 10.0;
+    let cell_px = |n: u16| {
+        let row = (n - 1) / 5;
+        let col = (n - 1) % 5;
+        let x = (col as f32 * 2.0 * cell
+            + if row.is_multiple_of(2) { cell } else { 0.0 }
+            + cell / 2.0) as u32;
+        let y = (row as f32 * cell + cell / 2.0) as u32;
+        pm.pixel(x, y)
+            .map(|c| (c.red(), c.green(), c.blue()))
+            .unwrap()
+    };
+    // sprite man = solid green square, black sprite man = magenta
+    assert_eq!(cell_px(46), (0, 255, 0));
+    assert_eq!(cell_px(5), (255, 0, 128));
+    // board colours from the manifest
+    assert_eq!(cell_px(1), (0x30, 0x30, 0x30));
+    std::fs::remove_dir_all(&dir).ok();
+
+    // inline colour overrides on top of a built-in
+    let t2 = theme::with_colors(theme::default_theme(), Some([1, 2, 3]), None);
+    assert_eq!(t2.light, [1, 2, 3]);
+    assert_eq!(t2.dark, theme::default_theme().dark);
+    let _ = Caption::default(); // keep the import used if params() drops it
 }

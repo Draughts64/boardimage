@@ -26,6 +26,10 @@ fn main() {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(512);
             let disk = std::env::var("CACHE_DIR").ok().filter(|d| !d.is_empty());
+            if let Some(dir) = std::env::var("THEMES_DIR").ok().filter(|d| !d.is_empty()) {
+                let n = boardimage::theme::load_dir(&dir);
+                eprintln!("boardimage: loaded {n} custom theme(s) from {dir}");
+            }
             let m = Arc::new(Metrics::new());
             let cache = Arc::new(Cache::new(mem_mb, disk, 2048));
             eprintln!("boardimage v{VERSION}");

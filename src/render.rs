@@ -212,6 +212,37 @@ fn draw_board_raster(p: &Params, pm: &mut Pixmap) {
 fn draw_piece(pm: &mut Pixmap, p: &Params, white: bool, kind: Kind, cx: f32, cy: f32, s: f32) {
     let base = s * 0.38;
     let alpha = if kind.is_ghost() { 76 } else { 255 };
+    // custom theme piece sprites (SVG/PNG from the themes directory)
+    if let Some(set) = p.theme.pieces {
+        let man_idx = u8::from(!white);
+        let king_idx = 2 + u8::from(!white);
+        let (idx, want_crown) = if kind.is_king() && set.has(king_idx) {
+            (king_idx, false)
+        } else {
+            (man_idx, kind.is_king())
+        };
+        let side = (s * 0.9).ceil().max(1.0) as u32;
+        if let Some(sp) = set.sprite(idx, side) {
+            let paint = tiny_skia::PixmapPaint {
+                opacity: if kind.is_ghost() { 0.3 } else { 1.0 },
+                ..Default::default()
+            };
+            let x = (cx - side as f32 / 2.0).round() as i32;
+            let y = (cy - side as f32 / 2.0).round() as i32;
+            pm.draw_pixmap(
+                x,
+                y,
+                sp.as_ref().as_ref(),
+                &paint,
+                Transform::identity(),
+                None,
+            );
+            if want_crown {
+                draw_crown(pm, cx, cy, s, base, alpha);
+            }
+            return;
+        }
+    }
     let (body, edge) = if white {
         ([255, 255, 255], [0, 0, 0])
     } else {
@@ -272,29 +303,33 @@ fn draw_piece(pm: &mut Pixmap, p: &Params, white: bool, kind: Kind, cx: f32, cy:
         }
     }
     if kind.is_king() {
-        // crown: gold star polygon
-        let r = base * 0.62;
-        let mut pb = PathBuilder::new();
-        for i in 0..10 {
-            let ang = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
-            let rad = if i % 2 == 0 { r } else { r * 0.45 };
-            let (px, py) = (cx + rad * ang.cos(), cy + rad * ang.sin() - s * 0.05);
-            if i == 0 {
-                pb.move_to(px, py)
-            } else {
-                pb.line_to(px, py)
-            };
-        }
-        pb.close();
-        if let Some(path) = pb.finish() {
-            pm.fill_path(
-                &path,
-                &paint([0xbf, 0x8c, 0x16], alpha),
-                FillRule::Winding,
-                Transform::identity(),
-                None,
-            );
-        }
+        draw_crown(pm, cx, cy, s, base, alpha);
+    }
+}
+
+fn draw_crown(pm: &mut Pixmap, cx: f32, cy: f32, s: f32, base: f32, alpha: u8) {
+    // gold star polygon
+    let r = base * 0.62;
+    let mut pb = PathBuilder::new();
+    for i in 0..10 {
+        let ang = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
+        let rad = if i % 2 == 0 { r } else { r * 0.45 };
+        let (px, py) = (cx + rad * ang.cos(), cy + rad * ang.sin() - s * 0.05);
+        if i == 0 {
+            pb.move_to(px, py)
+        } else {
+            pb.line_to(px, py)
+        };
+    }
+    pb.close();
+    if let Some(path) = pb.finish() {
+        pm.fill_path(
+            &path,
+            &paint([0xbf, 0x8c, 0x16], alpha),
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
     }
 }
 
@@ -623,15 +658,43 @@ pub fn svg(p: &Params) -> String {
         };
         let (cx, cy) = p.center(x, y);
         let r = c * 0.38;
-        let (fill, stroke) = if white {
-            ("#ffffff", "#000000")
-        } else {
-            ("#1a1a1a", "#dfdfdf")
-        };
         let op = if piece.kind.is_ghost() {
             " opacity=\"0.3\""
         } else {
             ""
+        };
+        // custom theme piece sprites: embed the rasterised sprite
+        if let Some(set) = p.theme.pieces {
+            let man_idx = u8::from(!white);
+            let king_idx = 2 + u8::from(!white);
+            let (idx, want_crown) = if piece.kind.is_king() && set.has(king_idx) {
+                (king_idx, false)
+            } else {
+                (man_idx, piece.kind.is_king())
+            };
+            let side = (c * 0.9).ceil().max(1.0) as u32;
+            if let Some(sp) = set.sprite(idx, side) {
+                if let Ok(png) = sp.encode_png() {
+                    use base64::Engine as _;
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+                    o += &format!(r#"<g{op}>"#);
+                    o += &format!(
+                        r##"<image x="{x}" y="{y}" width="{side}" height="{side}" href="data:image/png;base64,{b64}"/>"##,
+                        x = fmt(cx - side as f32 / 2.0),
+                        y = fmt(cy - side as f32 / 2.0),
+                    );
+                    if want_crown {
+                        o += &svg_crown(cx, cy, c, r);
+                    }
+                    o += "</g>";
+                    continue;
+                }
+            }
+        }
+        let (fill, stroke) = if white {
+            ("#ffffff", "#000000")
+        } else {
+            ("#1a1a1a", "#dfdfdf")
         };
         o += &format!(r#"<g{op}>"#);
         let rings: &[f32] = if piece.kind.is_king() {
@@ -649,19 +712,7 @@ pub fn svg(p: &Params) -> String {
             );
         }
         if piece.kind.is_king() {
-            let (cx2, cy2, _rr) = (fmt(cx), fmt(cy - c * 0.05), fmt(r * 0.62));
-            o += &format!(r##"<polygon fill="#bf8c16" points="{cx2},{cy2} "/>"##); // placeholder crown replaced below
-            let mut pts = String::new();
-            for i in 0..10 {
-                let ang = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
-                let rad = if i % 2 == 0 { r * 0.62 } else { r * 0.28 };
-                pts += &format!(
-                    "{},{} ",
-                    fmt(cx + rad * ang.cos()),
-                    fmt(cy - c * 0.05 + rad * ang.sin())
-                );
-            }
-            o += &format!(r##"<polygon fill="#bf8c16" points="{pts}"/>"##);
+            o += &svg_crown(cx, cy, c, r);
         }
         o += "</g>";
     }
@@ -710,7 +761,7 @@ pub fn svg(p: &Params) -> String {
         Notation::Coords => {
             for x in 0..p.board.width {
                 for y in 0..p.board.height {
-                    let letter = (b'a' + (x as u8 % 26)) as char;
+                    let letter = p.board.file_letter(x);
                     let col = if (x + y) % 2 == 0 { "#fff" } else { "#555" };
                     o += &format!(
                         r##"<text x="{}" y="{}" font-size="{:.0}" fill="{col}" font-family="sans-serif">{}{}</text>"##,
@@ -748,6 +799,20 @@ pub fn svg(p: &Params) -> String {
     }
     o += "</svg>";
     o
+}
+
+fn svg_crown(cx: f32, cy: f32, c: f32, r: f32) -> String {
+    let mut pts = String::new();
+    for i in 0..10 {
+        let ang = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
+        let rad = if i % 2 == 0 { r * 0.62 } else { r * 0.28 };
+        pts += &format!(
+            "{},{} ",
+            fmt(cx + rad * ang.cos()),
+            fmt(cy - c * 0.05 + rad * ang.sin())
+        );
+    }
+    format!(r##"<polygon fill="#bf8c16" points="{pts}"/>"##)
 }
 
 fn svg_text(s: &str, x: f32, y: f32, fs: f32, color: Option<&str>) -> String {

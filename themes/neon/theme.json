@@ -1,0 +1,7 @@
+{
+  "light": "#2b2b3b",
+  "dark": "#3d3d54",
+  "lastLight": "#5656a0",
+  "lastDark": "#44448a",
+  "pieces": { "wm": "wm.svg", "bm": "bm.svg", "wk": "wk.svg", "bk": "bk.svg" }
+}

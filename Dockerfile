@@ -15,5 +15,7 @@ COPY --from=builder /build/target/release/boardimage /usr/local/bin/boardimage
 USER boardimage
 EXPOSE 8080
 ENV BIND=0.0.0.0:8080
+# custom themes: mount a directory of <name>/theme.json (+ piece SVG/PNG)
+ENV THEMES_DIR=/themes
 HEALTHCHECK --interval=15s --timeout=3s CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
 CMD ["boardimage"]

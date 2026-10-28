@@ -17,7 +17,7 @@ docker build -t boardimage . # прод-образ (~15 МБ)
 
 Окружение web-сервера: `BIND` (по умолчанию 0.0.0.0:8080), `CACHE_MB`
 (in-memory LRU), `CACHE_DIR` + `CACHE_MB_DISK` (дисковый кэш с вытеснением
-по размеру).
+по размеру), `THEMES_DIR` (каталог кастомных тем, см. ниже).
 
 ## CLI: `boardimage render`
 
@@ -57,7 +57,8 @@ boardimage render --variant standard --delay-ms 800 \
 | `--board-size`/`--board-height` | своя доска (чётные 2..16) | 10×10 |
 | `--numbering <0..3>` | начало клетки 1: 0 низ-слева … 2 верх-слева (канон) | по варианту |
 | `--light-squares` | рабочие клетки светлые | по варианту |
-| `--theme <name>` | default, lidraughts-brown, lidraughts-blue, green, marble, wood | lidraughts-brown |
+| `--theme <name>` | встроенная или из `THEMES_DIR` | lidraughts-brown |
+| `--light` / `--dark` | инлайн-цвета доски `#rrggbb` | по теме |
 | `--notation` | none / numeric / algebraic / coords | none |
 | `--last-move <m>` | `3228`, `32-28`, `c3-b4` — подсветка последнего хода | — |
 | `--white` / `--black` | имена — включают полосу подписи | — |
@@ -66,6 +67,27 @@ boardimage render --variant standard --delay-ms 800 \
 | `--flip` | ориентация чёрными | — |
 | `--flat` | плоский стиль шашек | — |
 | `--transparent` | прозрачный фон (PNG/WebP) | — |
+
+## Кастомные темы (как у шахмат)
+
+Два способа задать свой дизайн:
+
+```bash
+# 1) инлайн — только цвета доски
+boardimage render --light "#f0d9b5" --dark "#b58863" --fen ... --out b.png
+curl "http://127.0.0.1:9091/board.png?fen=...&light=%23f0d9b5&dark=%23b58863"
+
+# 2) каталог тем THEMES_DIR — цвета + спрайты шашек (SVG или PNG):
+#    themes/neon/theme.json:
+#    {"light":"#2b2b3b","dark":"#3d3d54",
+#     "pieces":{"wm":"wm.svg","bm":"bm.svg","wk":"wk.svg","bk":"bk.svg"}}
+THEMES_DIR=./themes boardimage render --theme neon --fen ... --out n.png
+```
+
+Спрайты: `wm`/`bm` обязательны, `wk`/`bk` опциональны (упав — простая
+шашка + векторная корона); SVG растеризуется под размер клетки и
+кэшируется; призрачные шашки — opacity 0.3; в SVG-выводе спрайт
+встраивается как data-URI. Пример целиком: [`themes/neon/`](themes/neon).
 
 ## Web API (кратко — полностью в SPEC.md и /swagger)
 

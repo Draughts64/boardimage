@@ -306,6 +306,14 @@ impl Server {
             .get("theme")
             .and_then(|t| theme::by_name(t))
             .unwrap_or_else(theme::default_theme);
+        // inline board colour overrides (?light=#f0d9b5&dark=#b58863)
+        let th = match (
+            q.get("light").and_then(|c| theme::parse_hex(c)),
+            q.get("dark").and_then(|c| theme::parse_hex(c)),
+        ) {
+            (None, None) => th,
+            (l, d) => theme::with_colors(th, l, d),
+        };
         let params = Params {
             pos,
             board: bdef,

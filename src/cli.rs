@@ -66,9 +66,19 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
     if args.contains(&"--light-squares".to_string()) {
         bdef.light_squares = true;
     }
+    if let Some(dir) = std::env::var("THEMES_DIR").ok().filter(|d| !d.is_empty()) {
+        theme::load_dir(&dir);
+    }
     let th = get("--theme")
         .and_then(|t| theme::by_name(&t))
         .unwrap_or_else(theme::default_theme);
+    let th = match (
+        get("--light").and_then(|c| theme::parse_hex(&c)),
+        get("--dark").and_then(|c| theme::parse_hex(&c)),
+    ) {
+        (None, None) => th,
+        (l, d) => theme::with_colors(th, l, d),
+    };
     let last_move = get("--last-move").and_then(|s| board::parse_move_squares(&s, &bdef));
     let caption = {
         let w = get("--white").unwrap_or_default();
