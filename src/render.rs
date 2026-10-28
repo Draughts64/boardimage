@@ -92,7 +92,10 @@ impl Params {
         } else {
             y
         };
-        self.margin as f32 + (self.board.height - 1 - my) as f32 * self.cell()
+        // the caption bar sits ABOVE the board: shift everything down
+        self.caption_h() as f32
+            + self.margin as f32
+            + (self.board.height - 1 - my) as f32 * self.cell()
     }
     fn center(&self, x: u16, y: u16) -> (f32, f32) {
         let s = self.cell();
@@ -154,7 +157,7 @@ fn draw_board_raster(p: &Params, pm: &mut Pixmap) {
         rect(
             pm,
             p.margin as f32,
-            p.margin as f32,
+            p.margin as f32 + p.caption_h() as f32,
             p.size as f32,
             p.size as f32,
             &paint(bg, 255),
@@ -413,9 +416,9 @@ fn draw_overlays_raster(p: &Params, pm: &mut Pixmap) {
                 let letter = p.board.file_letter(x);
                 let sx = p.sx(x) + s / 2.0 - fs * 0.35;
                 let sy = if p.flipped {
-                    p.margin as f32 + p.size as f32 + fs * 0.9
+                    p.margin as f32 + p.caption_h() as f32 + p.size as f32 + fs * 0.9
                 } else {
-                    p.margin as f32 - fs * 0.25
+                    p.margin as f32 + p.caption_h() as f32 - fs * 0.25
                 };
                 draw_text(
                     pm,
@@ -563,7 +566,8 @@ pub fn svg(p: &Params) -> String {
     }
     if !p.transparent {
         o += &format!(
-            r##"<rect x="{m}" y="{m}" width="{s}" height="{s}" fill="{}"/>"##,
+            r##"<rect x="{m}" y="{}" width="{s}" height="{s}" fill="{}"/>"##,
+            p.margin + p.caption_h(),
             crate::theme::hex(p.theme.light),
             m = p.margin,
             s = p.size

@@ -191,3 +191,36 @@ fn walk_gif_blocks(data: &[u8]) {
     assert!(frames >= 1);
     assert!(comments <= 2, "ours + gifski's own watermark");
 }
+
+#[test]
+fn golden_caption_bar_above_board() {
+    use boardimage::render::{raster, Caption};
+    let mut p = params("W:W31:B1", 20, 256);
+    p.caption = Some(Caption {
+        white: "Ivanov Alexander".into(),
+        black: "Petrov Sergey".into(),
+        comment: "Championship 2026 R7".into(),
+    });
+    let pm = raster(&p);
+    let cap_h = 256 / 6;
+    assert_eq!((pm.width(), pm.height()), (256, 256 + cap_h));
+    // the bar strip at the very top is the caption background
+    let cap = pm.pixel(128, 2).unwrap();
+    assert_eq!((cap.red(), cap.green(), cap.blue()), (0x26, 0x24, 0x21));
+    // black man on square 1 sits at the top-left playing cell — it must
+    // render BELOW the caption bar, not under it (cell 1 -> x=1, y=9)
+    let cell = 256.0 / 10.0;
+    let px = pm
+        .pixel((1.5 * cell) as u32, (cap_h as f32 + 0.5 * cell) as u32)
+        .unwrap();
+    let (r, g, b) = (px.red(), px.green(), px.blue());
+    assert!(r < 80 && g < 80 && b < 80, "piece hidden by caption bar: {r},{g},{b}");
+    // and the strip just above the board (bottom of the caption) must
+    // not contain piece pixels either
+    let strip = pm.pixel((1.5 * cell) as u32, (cap_h - 3) as u32).unwrap();
+    assert_eq!(
+        (strip.red(), strip.green(), strip.blue()),
+        (0x26, 0x24, 0x21),
+        "caption bar leaks onto the board"
+    );
+}
