@@ -4,3 +4,6 @@ Cargo.lock.bak
 *.gif.given
 oa_check.json
 patch_server.py
+
+# generated demo renders
+demo/

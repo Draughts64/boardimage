@@ -130,6 +130,16 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
             let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
             std::fs::write(&out, svg(&p)).map_err(|e| e.to_string())?;
         }
+        "webp" => {
+            use crate::render::webp;
+            let pos = fen::parse(fens.first().unwrap(), &bdef)?;
+            let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
+            let quality: u8 = get("--quality")
+                .and_then(|q| q.parse().ok())
+                .unwrap_or(85)
+                .clamp(1, 100);
+            std::fs::write(&out, webp(&p, quality)?).map_err(|e| e.to_string())?;
+        }
         _ => {
             let pos = fen::parse(fens.first().unwrap(), &bdef)?;
             let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
