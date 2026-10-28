@@ -46,13 +46,57 @@ pub enum Notation {
     Coords,
 }
 
-fn arrow_rgba(c: Option<char>) -> ([u8; 4], &'static str) {
+/// Draw brushes ported 1:1 from draughtsground (lidraughts analysis):
+/// exact colours, opacities and line widths (units of a 512px board).
+pub struct Brush {
+    pub rgba: [u8; 3],
+    pub opacity: f32,
+    pub line_units: f32,
+    pub key: &'static str,
+}
+
+pub fn brush(c: Option<char>) -> Brush {
     match c {
-        Some('G') => ([0x41, 0xa6, 0x3c, 0xb4], "#41a63c"),
-        Some('B') => ([0x38, 0x97, 0xd3, 0xb4], "#3897d3"),
-        Some('R') => ([0xd3, 0x3d, 0x38, 0xb4], "#d33d38"),
-        Some('Y') => ([0xd8, 0xc0, 0x3a, 0xb4], "#d8c03a"),
-        _ => ([0x33, 0x33, 0x33, 0xa0], "#333333"),
+        Some('G') => Brush {
+            rgba: [0x15, 0x78, 0x1b],
+            opacity: 1.0,
+            line_units: 10.0,
+            key: "g",
+        },
+        Some('B') => Brush {
+            rgba: [0x00, 0x30, 0x88],
+            opacity: 1.0,
+            line_units: 10.0,
+            key: "b",
+        },
+        Some('R') => Brush {
+            rgba: [0x88, 0x20, 0x20],
+            opacity: 1.0,
+            line_units: 10.0,
+            key: "r",
+        },
+        Some('Y') => Brush {
+            rgba: [0xe6, 0x8f, 0x00],
+            opacity: 1.0,
+            line_units: 10.0,
+            key: "y",
+        },
+        // engine/auto shapes on lidraughts: paleBlue
+        _ => Brush {
+            rgba: [0x00, 0x30, 0x88],
+            opacity: 0.4,
+            line_units: 15.0,
+            key: "pb",
+        },
+    }
+}
+
+impl Brush {
+    fn alpha(&self) -> u8 {
+        (self.opacity * 255.0) as u8
+    }
+    fn hex(&self) -> String {
+        crate::theme::hex(self.rgba)
     }
 }
 
@@ -271,14 +315,22 @@ fn draw_piece(pm: &mut Pixmap, p: &Params, white: bool, kind: Kind, cx: f32, cy:
         );
         stroke_path(pm, &disc_path(cx, cy, base), edge, s * 0.012);
     } else {
-        // classic: gradient approximated by layered discs (bottom ring darker)
+        // classic: wide_crown-style wall approximated by layered discs
+        // (bottom = gradient start, mid = lerp, top = the piece face)
+        let n_rings = rings.len();
         for (i, &o) in rings.iter().enumerate() {
-            let shade = if white && i == 0 {
-                [0x7f, 0x7f, 0x7f]
-            } else if !white && i == 0 {
-                [0x00, 0x00, 0x00]
-            } else {
-                body
+            let shade = match (white, i) {
+                (true, i) if i + 1 < n_rings => [
+                    0x7f + (0xff - 0x7f) * i as u8 / (n_rings - 1) as u8,
+                    0x7f + (0xff - 0x7f) * i as u8 / (n_rings - 1) as u8,
+                    0x7f + (0xff - 0x7f) * i as u8 / (n_rings - 1) as u8,
+                ],
+                (false, i) if i + 1 < n_rings => [
+                    (0x9f * i as u8) / (n_rings - 1) as u8,
+                    (0x9f * i as u8) / (n_rings - 1) as u8,
+                    (0x9f * i as u8) / (n_rings - 1) as u8,
+                ],
+                _ => body,
             };
             let d = disc_path(cx, cy + o * s, base);
             pm.fill_path(
@@ -347,9 +399,9 @@ fn draw_pieces_raster(p: &Params, pm: &mut Pixmap) {
 
 fn draw_overlays_raster(p: &Params, pm: &mut Pixmap) {
     let s = p.cell();
-    // arrows
+    // arrows (draughtsground geometry: 512-unit board, marker M0,0 V4 L3,2 Z)
     for a in &p.arrows {
-        let (rgba, _) = arrow_rgba(a.color);
+        let br = brush(a.color);
         let Some((ax, ay)) = p.board.xy(a.from) else {
             continue;
         };
@@ -358,56 +410,64 @@ fn draw_overlays_raster(p: &Params, pm: &mut Pixmap) {
         };
         let (fx, fy) = p.center(ax, ay);
         let (tx, ty) = p.center(bx, by);
+        let alpha = br.alpha();
         if a.from == a.to {
-            let d = disc_path(fx, fy, s * 0.16);
-            pm.fill_path(
-                &d,
-                &paint([rgba[0], rgba[1], rgba[2]], rgba[3]),
-                FillRule::Winding,
+            // square circle: stroke ring hugging the cell, fill none
+            // (draughtsground circleWidth: 4 units of a 512px board)
+            let wpx = 4.0 * s / 51.2;
+            let st = Stroke {
+                width: wpx,
+                line_cap: LineCap::Round,
+                ..Default::default()
+            };
+            pm.stroke_path(
+                &disc_path(fx, fy, s / 2.0 - wpx / 2.0),
+                &paint(br.rgba, alpha),
+                &st,
                 Transform::identity(),
                 None,
             );
             continue;
         }
+        // shaft: round cap, width = brush units (10 user / 15 pale)
         let (dx, dy) = (tx - fx, ty - fy);
         let len = (dx * dx + dy * dy).sqrt();
         let (ux, uy) = (dx / len, dy / len);
-        let head = s * 0.30;
-        let start_off = s * 0.34;
+        let stroke_w = br.line_units * s / 51.2;
+        // shorten the end by the draughtsground margin (bw/512 * board px)
+        let m = p.board.width as f32 * p.board.width as f32 * s / 512.0;
+        let (ex, ey) = (tx - ux * m, ty - uy * m);
         let mut pb = PathBuilder::new();
-        pb.move_to(fx + ux * start_off, fy + uy * start_off);
-        pb.line_to(tx - ux * head, ty - uy * head);
+        pb.move_to(fx, fy);
+        pb.line_to(ex, ey);
         let shaft = pb.finish().unwrap();
         let st = Stroke {
-            width: s * 0.14,
+            width: stroke_w,
             line_cap: LineCap::Round,
             ..Default::default()
         };
         pm.stroke_path(
             &shaft,
-            &paint([rgba[0], rgba[1], rgba[2]], rgba[3]),
+            &paint(br.rgba, alpha),
             &st,
             Transform::identity(),
             None,
         );
-        // arrowhead diamond
-        let mut pb = PathBuilder::new();
+        // head: the draughtsground marker M0,0 V4 L3,2 Z in stroke units
+        // (base 4w wide, 3w long, tip 0.95w past the line end, refX 2.05)
         let (nx, ny) = (-uy, ux);
-        pb.move_to(tx, ty);
-        pb.line_to(
-            tx - ux * head + nx * head * 0.5,
-            ty - uy * head + ny * head * 0.5,
-        );
-        pb.line_to(tx - ux * head * 0.4, ty - uy * head * 0.4);
-        pb.line_to(
-            tx - ux * head - nx * head * 0.5,
-            ty - uy * head - ny * head * 0.5,
-        );
+        let base_c = (ex - ux * 2.05 * stroke_w, ey - uy * 2.05 * stroke_w);
+        let tip = (ex + ux * 0.95 * stroke_w, ey + uy * 0.95 * stroke_w);
+        let half = 2.0 * stroke_w;
+        let mut pb = PathBuilder::new();
+        pb.move_to(tip.0, tip.1);
+        pb.line_to(base_c.0 + nx * half, base_c.1 + ny * half);
+        pb.line_to(base_c.0 - nx * half, base_c.1 - ny * half);
         pb.close();
         if let Some(h) = pb.finish() {
             pm.fill_path(
                 &h,
-                &paint([rgba[0], rgba[1], rgba[2]], rgba[3]),
+                &paint(br.rgba, alpha),
                 FillRule::Winding,
                 Transform::identity(),
                 None,
@@ -716,8 +776,21 @@ pub fn svg(p: &Params) -> String {
         }
         o += "</g>";
     }
+    // arrows, ported from draughtsground svg.ts (markers + round-cap lines)
+    if !p.arrows.is_empty() {
+        o += "<defs>";
+        for a in &p.arrows {
+            let br = brush(a.color);
+            o += &format!(
+                r##"<marker id="arrowhead-{key}" orient="auto" markerWidth="4" markerHeight="8" refX="2.05" refY="2.01"><path d="M0,0 V4 L3,2 Z" fill="{color}"/></marker>"##,
+                key = br.key,
+                color = br.hex(),
+            );
+        }
+        o += "</defs>";
+    }
     for a in &p.arrows {
-        let (_, hexc) = arrow_rgba(a.color);
+        let br = brush(a.color);
         let Some((ax, ay)) = p.board.xy(a.from) else {
             continue;
         };
@@ -727,20 +800,31 @@ pub fn svg(p: &Params) -> String {
         let (fx, fy) = p.center(ax, ay);
         let (tx, ty) = p.center(bx, by);
         if a.from == a.to {
+            let w = 4.0 * c / 51.2;
             o += &format!(
-                r##"<circle cx="{}" cy="{}" r="{}" fill="{hexc}" fill-opacity="0.7"/>"##,
+                r##"<circle cx="{}" cy="{}" r="{}" fill="none" stroke="{color}" stroke-width="{w}" opacity="{op}"/>"##,
                 fmt(fx),
                 fmt(fy),
-                fmt(c * 0.16)
+                fmt(c / 2.0 - w / 2.0),
+                color = br.hex(),
+                op = fmt(br.opacity),
             );
         } else {
+            let stroke_w = br.line_units * c / 51.2;
+            let (dx, dy) = (tx - fx, ty - fy);
+            let len = (dx * dx + dy * dy).sqrt();
+            let m = p.board.width as f32 * p.board.width as f32 * c / 512.0;
+            let (ux, uy) = (dx / len, dy / len);
             o += &format!(
-                r##"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{hexc}" stroke-width="{}" stroke-opacity="0.7" stroke-linecap="round"/>"##,
+                r##"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{color}" stroke-width="{w}" stroke-linecap="round" marker-end="url(#arrowhead-{key})" opacity="{op}"/>"##,
                 fmt(fx),
                 fmt(fy),
-                fmt(tx),
-                fmt(ty),
-                fmt(c * 0.14)
+                fmt(tx - ux * m),
+                fmt(ty - uy * m),
+                color = br.hex(),
+                w = fmt(stroke_w),
+                key = br.key,
+                op = fmt(br.opacity),
             );
         }
     }

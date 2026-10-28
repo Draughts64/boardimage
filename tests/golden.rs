@@ -289,3 +289,52 @@ fn golden_custom_theme_from_dir() {
     assert_eq!(t2.dark, theme::default_theme().dark);
     let _ = Caption::default(); // keep the import used if params() drops it
 }
+
+#[test]
+fn golden_arrows_draughtsground_style() {
+    use boardimage::render::raster;
+    let mut p = params("W:W32:B5", 20, 512);
+    p.arrows = vec![
+        boardimage::render::Arrow {
+            from: 32,
+            to: 28,
+            color: Some('G'),
+        },
+        boardimage::render::Arrow {
+            from: 44,
+            to: 44,
+            color: None,
+        },
+    ];
+    let pm = raster(&p);
+    let cell = 51.2_f32;
+    let center = |n: u16| {
+        let (x, y) = board::from_game_type(20).unwrap().0.xy(n).unwrap();
+        // screen y is flipped: row 0 of the board is the bottom
+        ((x as f32 + 0.5) * cell, (9.0 - y as f32 + 0.5) * cell)
+    };
+    let (ax, ay) = center(32);
+    let (bx, by) = center(28);
+    // shaft midpoint must be the green brush (#15781b over the board)
+    let px = pm
+        .pixel(((ax + bx) / 2.0) as u32, ((ay + by) / 2.0) as u32)
+        .unwrap();
+    assert!(
+        px.green() > px.red() && px.green() > px.blue(),
+        "green shaft: {} {} {}",
+        px.red(),
+        px.green(),
+        px.blue()
+    );
+    // the circle marker: a pale-blue ring hugging cell 44's border
+    let (cx, cy) = center(44);
+    // 40% blue over the dark square shifts red down and blue up
+    let edge = pm.pixel((cx + cell / 2.0 - 2.0) as u32, cy as u32).unwrap();
+    assert!(
+        edge.red() < 150 && edge.blue() > 90,
+        "pale-blue ring tint: {} {} {}",
+        edge.red(),
+        edge.green(),
+        edge.blue()
+    );
+}
