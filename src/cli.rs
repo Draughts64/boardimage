@@ -95,6 +95,10 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
             comment: get("--comment").unwrap_or_default(),
         })
     };
+    let mut margin: u32 = get("--margin")
+        .and_then(|m| m.parse().ok())
+        .unwrap_or(0)
+        .min(64);
     let notation = match get("--notation").as_deref() {
         Some("numeric") => Notation::Numeric,
         Some("algebraic") => Notation::Algebraic,
@@ -105,6 +109,17 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
             Some('N') | Some('S') => Notation::Numeric,
             _ => Notation::None,
         },
+    };
+
+    if matches!(notation, Notation::Algebraic) && margin < 22 {
+        margin = 22; // border labels need a band
+    }
+    let border = if args.contains(&"--border".to_string()) {
+        true
+    } else if args.contains(&"--no-border".to_string()) {
+        false
+    } else {
+        margin > 0 // default: labels when there is a band
     };
 
     let ext = out.rsplit('.').next().unwrap_or("");
@@ -133,13 +148,19 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
         }
         "svg" => {
             let pos = fen::parse(fens.first().unwrap(), &bdef)?;
-            let p = mk_params(pos, bdef, size, th, last_move, arrows, squares, notation, caption, args);
+            let p = mk_params(
+                pos, bdef, size, th, last_move, arrows, squares, notation, margin, border, caption,
+                args,
+            );
             std::fs::write(&out, svg(&p)).map_err(|e| e.to_string())?;
         }
         "webp" => {
             use crate::render::webp;
             let pos = fen::parse(fens.first().unwrap(), &bdef)?;
-            let p = mk_params(pos, bdef, size, th, last_move, arrows, squares, notation, caption, args);
+            let p = mk_params(
+                pos, bdef, size, th, last_move, arrows, squares, notation, margin, border, caption,
+                args,
+            );
             let quality: u8 = get("--quality")
                 .and_then(|q| q.parse().ok())
                 .unwrap_or(85)
@@ -148,7 +169,10 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
         }
         _ => {
             let pos = fen::parse(fens.first().unwrap(), &bdef)?;
-            let p = mk_params(pos, bdef, size, th, last_move, arrows, squares, notation, caption, args);
+            let p = mk_params(
+                pos, bdef, size, th, last_move, arrows, squares, notation, margin, border, caption,
+                args,
+            );
             std::fs::write(&out, png(&p)?).map_err(|e| e.to_string())?;
         }
     }
@@ -166,6 +190,8 @@ fn mk_params(
     arrows: Vec<crate::render::Arrow>,
     squares: Vec<(u16, f32)>,
     notation: Notation,
+    margin: u32,
+    border: bool,
     caption: Option<Caption>,
     args: &[String],
 ) -> Params {
@@ -180,7 +206,8 @@ fn mk_params(
         squares,
         arrows,
         notation,
-        margin: 0,
+        margin,
+        border,
         transparent: args.contains(&"--transparent".to_string()),
         caption,
     }

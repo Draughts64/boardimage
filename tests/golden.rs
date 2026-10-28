@@ -16,6 +16,7 @@ fn params(fen: &str, gt: u32, size: u32) -> Params {
         squares: vec![],
         arrows: vec![],
         notation: Notation::None,
+        border: false,
         margin: 0,
         transparent: false,
         caption: None,

@@ -348,8 +348,29 @@ impl Server {
             margin: q
                 .get("margin")
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(0)
+                .map(|m: u32| {
+                    if q.get("notation").is_some_and(|v| v == "algebraic") && m < 22 {
+                        22
+                    } else {
+                        m
+                    }
+                })
+                .unwrap_or(if q.get("notation").is_some_and(|v| v == "algebraic") {
+                    22
+                } else {
+                    0
+                })
                 .min(64),
+            border: q
+                .get("border")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or_else(|| {
+                    let m = q
+                        .get("margin")
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .unwrap_or(0);
+                    m > 0 || q.get("notation").is_some_and(|v| v == "algebraic")
+                }),
             transparent: q
                 .get("transparent")
                 .is_some_and(|s| s == "true" || s == "1"),

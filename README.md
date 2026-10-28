@@ -61,6 +61,8 @@ boardimage render --variant standard --delay-ms 800 \
 | `--theme <name>` | встроенная или из `THEMES_DIR` | lidraughts-brown |
 | `--light` / `--dark` | инлайн-цвета доски `#rrggbb` | по теме |
 | `--notation` | none / numeric / algebraic / coords | none |
+| `--margin <px>` | поля вокруг доски (несут и рамку подписей) | 0 |
+| `--border` / `--no-border` | алгебраическая рамка: файлы снизу, ранги слева (сочетается с numeric-номерами) | вкл при margin>0 |
 | `--last-move <m>` | `3228`, `32-28`, `c3-b4` — подсветка последнего хода | — |
 | `--arrows <csv>` | `G3228,R0622,44` — стрелки G/B/R/Y + круг-маркер | — |
 | `--squares <csv>` | `46:0.9,12` — подсветка клеток с интенсивностью | — |

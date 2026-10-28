@@ -32,6 +32,8 @@ pub struct Params {
     pub squares: Vec<(u16, f32)>, // heatmap (alpha 0..1)
     pub arrows: Vec<Arrow>,
     pub notation: Notation,
+    /// algebraic border labels (files bottom, ranks left) in the margin band
+    pub border: bool,
     pub margin: u32,
     pub transparent: bool,
     pub caption: Option<Caption>,
@@ -197,13 +199,14 @@ fn stroke_path(pm: &mut Pixmap, path: &Path, color: [u8; 3], w: f32) {
 fn draw_board_raster(p: &Params, pm: &mut Pixmap) {
     let c = p.cell();
     if !p.transparent {
+        // the margin band shares the light colour so border labels read
         let bg = p.theme.light;
         rect(
             pm,
-            p.margin as f32,
-            p.margin as f32 + p.caption_h() as f32,
-            p.size as f32,
-            p.size as f32,
+            0.0,
+            0.0,
+            p.total_w() as f32,
+            p.total_h() as f32,
             &paint(bg, 255),
         );
     }
@@ -505,43 +508,42 @@ fn draw_overlays_raster(p: &Params, pm: &mut Pixmap) {
                 }
             }
         }
-        Notation::Algebraic => {
-            let fs = (s * 0.24).clamp(7.0, 26.0);
-            for x in 0..p.board.width {
-                let letter = p.board.file_letter(x);
-                let sx = p.sx(x) + s / 2.0 - fs * 0.35;
-                let sy = if p.flipped {
-                    p.margin as f32 + p.caption_h() as f32 + p.size as f32 + fs * 0.9
-                } else {
-                    p.margin as f32 + p.caption_h() as f32 - fs * 0.25
-                };
-                draw_text(
-                    pm,
-                    &letter.to_string(),
-                    sx,
-                    sy,
-                    fs * 0.6,
-                    [0x33, 0x33, 0x33],
-                );
-            }
-            for y in 0..p.board.height {
-                let sx = if p.flipped {
-                    p.margin as f32 - fs * 1.6
-                } else {
-                    p.margin as f32 + p.size as f32 + fs * 0.4
-                };
-                let sy = p.sy(y) + s / 2.0 - fs * 0.3;
-                draw_text(
-                    pm,
-                    &(y + 1).to_string(),
-                    sx,
-                    sy,
-                    fs * 0.6,
-                    [0x33, 0x33, 0x33],
-                );
-            }
-        }
-        Notation::None => {}
+        Notation::Algebraic | Notation::None => {}
+    }
+    if p.border || matches!(p.notation, Notation::Algebraic) {
+        draw_border_raster(p, pm);
+    }
+}
+
+/// Algebraic border labels (chessground positions: files along the
+/// bottom, ranks along the left; mirrored when flipped).
+fn draw_border_raster(p: &Params, pm: &mut Pixmap) {
+    let m = p.margin as f32;
+    if m < 6.0 {
+        return; // no band to draw in
+    }
+    let fs = (m / 5.5).clamp(2.0, 16.0); // one bitmap pixel
+    let col = [0x33, 0x33, 0x33];
+    let top = p.caption_h() as f32 + m;
+    for x in 0..p.board.width {
+        let letter = p.board.file_letter(x).to_string();
+        let cx = p.sx(x) + p.cell() / 2.0 - fs * 1.5;
+        let cy = if p.flipped {
+            top - 5.0 * fs
+        } else {
+            top + p.size as f32 + (m - 5.0 * fs) / 2.0
+        };
+        draw_text(pm, &letter, cx, cy, fs, col);
+    }
+    for y in 0..p.board.height {
+        let rank = (y + 1).to_string();
+        let cy = p.sy(y) + p.cell() / 2.0 - 2.5 * fs;
+        let cx = if p.flipped {
+            m + p.size as f32 + (m - 3.0 * fs) / 2.0
+        } else {
+            (m - 3.5 * fs) / 2.0
+        };
+        draw_text(pm, &rank, cx, cy, fs, col);
     }
 }
 
@@ -661,11 +663,10 @@ pub fn svg(p: &Params) -> String {
     }
     if !p.transparent {
         o += &format!(
-            r##"<rect x="{m}" y="{}" width="{s}" height="{s}" fill="{}"/>"##,
-            p.margin + p.caption_h(),
+            r##"<rect width="{w}" height="{h}" fill="{}"/>"##,
             crate::theme::hex(p.theme.light),
-            m = p.margin,
-            s = p.size
+            w = p.total_w(),
+            h = p.total_h()
         );
     }
     for y in 0..p.board.height {
@@ -858,30 +859,51 @@ pub fn svg(p: &Params) -> String {
                 }
             }
         }
-        Notation::Algebraic => {
-            for x in 0..p.board.width {
-                let letter = (b'a' + (x as u8 % 26)) as char;
-                o += &format!(
-                    r##"<text x="{}" y="{}" font-size="{:.0}" fill="#333" font-family="sans-serif">{}</text>"##,
-                    fmt(p.sx(x) + c * 0.38),
-                    fmt(p.margin as f32 - c * 0.06),
-                    c * 0.26,
-                    letter
-                );
-            }
-            for y in 0..p.board.height {
-                o += &format!(
-                    r##"<text x="{}" y="{}" font-size="{:.0}" fill="#333" font-family="sans-serif">{}</text>"##,
-                    fmt(p.margin as f32 + p.size as f32 + c * 0.10),
-                    fmt(p.sy(y) + c * 0.55),
-                    c * 0.26,
-                    y + 1
-                );
-            }
-        }
-        Notation::None => {}
+        Notation::Algebraic | Notation::None => {}
+    }
+    if p.border || matches!(p.notation, Notation::Algebraic) {
+        o += &svg_border(p);
     }
     o += "</svg>";
+    o
+}
+
+/// Algebraic border labels: files along the bottom, ranks along the
+/// left (mirrored when flipped) - chessground positions.
+fn svg_border(p: &Params) -> String {
+    let m = p.margin as f32;
+    if m < 6.0 {
+        return String::new();
+    }
+    let fs = (m / 3.2).clamp(6.0, 22.0); // font size
+    let mut o = String::new();
+    let top = p.caption_h() as f32 + m;
+    for x in 0..p.board.width {
+        let letter = p.board.file_letter(x);
+        let (tx, ty) = if p.flipped {
+            (p.sx(x) + p.cell() / 2.0, top - fs * 0.2)
+        } else {
+            (p.sx(x) + p.cell() / 2.0, top + p.size as f32 + m * 0.85)
+        };
+        o += &format!(
+            r##"<text x="{x}" y="{y}" font-size="{fs:.0}" fill="#333" text-anchor="middle" font-family="sans-serif">{letter}</text>"##,
+            x = fmt(tx),
+            y = fmt(ty),
+        );
+    }
+    for y in 0..p.board.height {
+        let rank = y + 1;
+        let (tx, ty) = if p.flipped {
+            (m + p.size as f32 + m * 0.45, p.sy(y) + p.cell() * 0.62)
+        } else {
+            (m * 0.5, p.sy(y) + p.cell() * 0.62)
+        };
+        o += &format!(
+            r##"<text x="{x}" y="{y}" font-size="{fs:.0}" fill="#333" text-anchor="middle" font-family="sans-serif">{rank}</text>"##,
+            x = fmt(tx),
+            y = fmt(ty),
+        );
+    }
     o
 }
 

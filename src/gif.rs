@@ -71,6 +71,7 @@ pub fn encode(params: &GifParams, frames: &[Frame]) -> Result<Vec<u8>, String> {
             squares: vec![],
             arrows: vec![],
             notation: crate::render::Notation::None,
+            border: false,
             margin: 0,
             transparent: false,
             caption: params.caption.clone(),
