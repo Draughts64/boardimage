@@ -87,6 +87,7 @@ fn golden_gif_sizes() {
             flipped: false,
             delay_ms: 500,
             caption: None,
+            comment: String::new(),
         },
         &frames,
     )

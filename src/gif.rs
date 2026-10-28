@@ -21,6 +21,7 @@ pub struct GifParams {
     pub flipped: bool,
     pub delay_ms: u32,
     pub caption: Option<Caption>,
+    pub comment: String,
 }
 
 struct SharedBuf(Arc<Mutex<Vec<u8>>>);
@@ -97,5 +98,20 @@ pub fn encode(params: &GifParams, frames: &[Frame]) -> Result<Vec<u8>, String> {
     if data.is_empty() {
         return Err("gif writer produced no data".into());
     }
+    // GIF Comment Extension right after the header (SPEC §4.5: the
+    // comment travels inside the file metadata).
+    let data = if params.comment.is_empty() {
+        data
+    } else {
+        let mut out = data[..6].to_vec(); // GIF89a
+        out.extend_from_slice(&[0x21, 0xFE]); // extension + comment label
+        for chunk in params.comment.as_bytes().chunks(255) {
+            out.push(chunk.len() as u8);
+            out.extend_from_slice(chunk);
+        }
+        out.push(0); // block terminator
+        out.extend_from_slice(&data[6..]);
+        out
+    };
     Ok(data)
 }

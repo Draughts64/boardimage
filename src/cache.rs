@@ -12,6 +12,7 @@ use std::time::SystemTime;
 pub struct Cache {
     mem: Mutex<MemLru>,
     dir: Option<PathBuf>,
+    disk_max_bytes: u64,
 }
 
 struct MemLru {
@@ -26,7 +27,6 @@ impl Cache {
         let dir = disk_dir.map(PathBuf::from).inspect(|d| {
             let _ = std::fs::create_dir_all(d);
         });
-        let _ = disk_mb; // disk eviction is size-of-dir check on write
         Self {
             mem: Mutex::new(MemLru {
                 map: HashMap::new(),
@@ -35,6 +35,39 @@ impl Cache {
                 tick: 0,
             }),
             dir,
+            disk_max_bytes: disk_mb as u64 * 1024 * 1024,
+        }
+    }
+
+    /// Delete oldest disk files until under budget (best-effort; called
+    /// after writes — SPEC §5 disk LRU eviction).
+    fn evict_disk(&self) {
+        let Some(dir) = &self.dir else { return };
+        let mut files: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
+        for sub in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            for f in std::fs::read_dir(sub.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                if let (Ok(md), Ok(t)) = (f.metadata(), f.metadata().and_then(|m| m.modified())) {
+                    files.push((t, md.len(), f.path()));
+                }
+            }
+        }
+        let total: u64 = files.iter().map(|(_, l, _)| *l).sum();
+        if total <= self.disk_max_bytes {
+            return;
+        }
+        files.sort_by_key(|(t, _, _)| *t);
+        let mut freed = 0u64;
+        for (_, len, path) in files {
+            if total.saturating_sub(freed) <= self.disk_max_bytes {
+                break;
+            }
+            if std::fs::remove_file(&path).is_ok() {
+                freed += len;
+            }
         }
     }
 
@@ -90,6 +123,7 @@ impl Cache {
             let sub = dir.join(&key[..2]);
             let _ = std::fs::create_dir_all(&sub);
             let _ = std::fs::write(sub.join(key), &data);
+            self.evict_disk();
         }
     }
 

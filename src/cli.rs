@@ -80,6 +80,7 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
                         .and_then(|d| d.parse().ok())
                         .unwrap_or(700),
                     caption,
+                    comment: get("--comment").unwrap_or_default(),
                 },
                 &frames,
             )?;

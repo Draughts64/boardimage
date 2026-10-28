@@ -44,6 +44,8 @@ struct GifRequest {
     white: String,
     #[serde(default)]
     black: String,
+    #[serde(default)]
+    comment: String,
     frames: Vec<GifFrame>,
 }
 
@@ -457,10 +459,11 @@ impl Server {
                 flipped: req.orientation.as_deref() == Some("black"),
                 delay_ms: req.delay_ms,
                 caption: (!req.white.is_empty() || !req.black.is_empty()).then(|| Caption {
-                    white: req.white,
+                    white: req.white.clone(),
                     black: req.black,
                     comment: String::new(),
                 }),
+                comment: req.comment,
             };
             crate::gif::encode(&gparams, &frames)
         };
