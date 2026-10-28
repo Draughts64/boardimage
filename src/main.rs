@@ -2,7 +2,7 @@
 //   boardimage serve [--bind 127.0.0.1:8080]   (default)
 //   boardimage render --fen ... --out file.png [png|svg|gif]
 
-use boardimage::{cli, metrics::Metrics, server, VERSION};
+use boardimage::{cache::Cache, cli, metrics::Metrics, server, VERSION};
 use std::sync::Arc;
 
 fn main() {
@@ -21,9 +21,15 @@ fn main() {
                 .and_then(|i| args.get(i + 1).cloned())
                 .or_else(|| std::env::var("BIND").ok())
                 .unwrap_or_else(|| "127.0.0.1:8080".into());
+            let mem_mb: usize = std::env::var("CACHE_MB")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(512);
+            let disk = std::env::var("CACHE_DIR").ok().filter(|d| !d.is_empty());
             let m = Arc::new(Metrics::new());
+            let cache = Arc::new(Cache::new(mem_mb, disk, 2048));
             eprintln!("boardimage v{VERSION}");
-            if let Err(e) = server::run(&bind, m) {
+            if let Err(e) = server::run(&bind, m, cache) {
                 eprintln!("server error: {e}");
                 std::process::exit(1);
             }

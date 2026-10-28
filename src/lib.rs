@@ -3,11 +3,13 @@
 // PNG/GIF encoding, Prometheus metrics, HTTP server and CLI.
 
 pub mod board;
+pub mod cache;
 pub mod cli;
 pub mod fen;
 pub mod gif;
 pub mod glyph;
 pub mod metrics;
+pub mod openapi;
 pub mod render;
 pub mod server;
 pub mod theme;

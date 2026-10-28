@@ -740,3 +740,16 @@ pub fn png(p: &Params) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())?;
     Ok(out)
 }
+
+pub fn webp(p: &Params, quality: u8) -> Result<Vec<u8>, String> {
+    let pm = raster(p);
+    let raw = pm.data().to_vec();
+    let (w, h) = (pm.width(), pm.height());
+    let encoder = webp::Encoder::from_rgba(&raw, w, h);
+    if quality >= 100 {
+        Ok(encoder.encode_lossless().to_vec())
+    } else {
+        // libwebp quality f32 0..100
+        Ok(encoder.encode(f32::from(quality)).to_vec())
+    }
+}

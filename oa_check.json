@@ -1,0 +1,62 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "boardimage",
+    "description": "Шашечные доски: PNG/WebP/SVG картинки позиций и GIF-реплеи. 18 вариантов по PDN GameType, нумерация клеток, темы. Движка правил нет: для GIF партию проигрывает клиент и присылает кадры.",
+    "version": "0.1.0",
+    "license": { "name": "AGPL-3.0", "url": "https://www.gnu.org/licenses/agpl-3.0.html" }
+  },
+  "servers": [{ "url": "/" }],
+  "paths": {
+    "/board.png": { "get": { "summary": "Доска в PNG", "parameters": [{"$ref": "#/components/parameters/Fen"}, {"$ref": "#/components/parameters/BoardSize"}, {"$ref": "#/components/parameters/BoardHeight"}, {"$ref": "#/components/parameters/Size"}, {"$ref": "#/components/parameters/LastMove"}, {"$ref": "#/components/parameters/Arrows"}, {"$ref": "#/components/parameters/Squares"}, {"$ref": "#/components/parameters/Orientation"}, {"$ref": "#/components/parameters/LightSquares"}, {"$ref": "#/components/parameters/GameType"}, {"$ref": "#/components/parameters/Variant"}, {"$ref": "#/components/parameters/Notation"}, {"$ref": "#/components/parameters/Numbering"}, {"$ref": "#/components/parameters/PieceStyle"}, {"$ref": "#/components/parameters/Theme"}, {"$ref": "#/components/parameters/White"}, {"$ref": "#/components/parameters/Black"}, {"$ref": "#/components/parameters/Comment"}, {"$ref": "#/components/parameters/Margin"}, {"$ref": "#/components/parameters/Transparent"}], "responses": { "200": { "description": "PNG", "content": { "image/png": { "schema": { "type": "string", "format": "binary" } } } }, "400": { "$ref": "#/components/responses/BadRequest" } } } },
+    "/board.webp": { "get": { "summary": "Доска в WebP", "parameters": [{"$ref": "#/components/parameters/Fen"}, {"$ref": "#/components/parameters/Quality"}], "responses": { "200": { "description": "WebP", "content": { "image/webp": {} } }, "400": { "$ref": "#/components/responses/BadRequest" } } } },
+    "/board.svg": { "get": { "summary": "Доска в SVG", "parameters": [{"$ref": "#/components/parameters/Fen"}], "responses": { "200": { "description": "SVG", "content": { "image/svg+xml": {} } }, "400": { "$ref": "#/components/responses/BadRequest" } } } },
+    "/game.gif": { "post": { "summary": "GIF-реплей (кадры проигрывает клиент)", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GifRequest" } } } }, "responses": { "200": { "description": "GIF", "content": { "image/gif": {} } }, "400": { "$ref": "#/components/responses/BadRequest" } } } },
+    "/healthz": { "get": { "summary": "Живость", "responses": { "200": { "description": "ok" } } } },
+    "/metrics": { "get": { "summary": "Prometheus-метрики", "responses": { "200": { "description": "text/plain" } } } }
+  },
+  "components": {
+    "responses": { "BadRequest": { "description": "Невалидный параметр (invalid fen / invalid boardsize / fen required / …)" } },
+    "parameters": {
+      "Fen": { "name": "fen", "in": "query", "required": true, "schema": { "type": "string" }, "example": "W:W31-50:B1-20", "description": "Шашечный FEN: turn:белые:чёрные; диапазоны через '-', K=король, G/P=призрачные" },
+      "BoardSize": { "name": "boardSize", "in": "query", "schema": { "type": "integer", "default": 10, "enum": [8, 10, 12] }, "description": "Ширина доски (чётная 2..16)" },
+      "BoardHeight": { "name": "boardHeight", "in": "query", "schema": { "type": "integer }, "description": "Высота для неквадратных досок (Спанциретти 10×8)" },
+      "Size": { "name": "size", "in": "query", "schema": { "type": "integer", "default": 360, "minimum": 16, "maximum": 1024 } },
+      "Quality": { "name": "quality", "in": "query", "schema": { "type": "integer", "default": 85, "minimum": 1, "maximum": 100 }, "description": "WebP; 100 = lossless" },
+      "LastMove": { "name": "lastMove", "in": "query", "schema": { "type": "string", "example": "4741" }, "description": "UCI-номера клеток from+to — подсветка" },
+      "Arrows": { "name": "arrows", "in": "query", "schema": { "type": "string", "example": "G0622,44" }, "description": "CSV [GBRY]?<from><to>; from==to — круг" },
+      "Squares": { "name": "squares", "in": "query", "schema": { "type": "string", "example": "12,19:0.8" }, "description": "CSV клетка[:alpha] — подсветка с интенсивностью" },
+      "Orientation": { "name": "orientation", "in": "query", "schema": { "type": "string", "enum": ["white", "black"], "default": "white" } },
+      "LightSquares": { "name": "lightSquares", "in": "query", "schema": { "type": "boolean", "default": false }, "description": "Рабочие клетки светлые (итальянские/испанские)" },
+      "GameType": { "name": "gameType", "in": "query", "schema": { "type": "integer", "enum": [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 40, 41, 96, 97, 98] }, "description": "PDN GameType (22=italian, 27=canadian 12×12, 41=spanciretti 10×8, 96-98=наши)" },
+      "Variant": { "name": "variant", "in": "query", "schema": { "type": "string", "enum": ["standard", "english", "italian", "pool", "spanish", "russian", "brazilian", "canadian", "portuguese", "czech", "turkish", "thai", "frisian", "spanciretti", "breakthrough", "frysk", "antidraughts"] } },
+      "Notation": { "name": "notation", "in": "query", "schema": { "type": "string", "enum": ["none", "numeric", "algebraic", "coords"], "default": "none" }, "description": "numeric: номер на каждой нумеруемой клетке (все 1..50 сразу); coords: a1 на каждой клетке" },
+      "Numbering": { "name": "numbering", "in": "query", "schema": { "type": "integer", "minimum": 0, "maximum": 3, "default": 0 }, "description": "PDN: 0 низ-слева, 1 низ-справа, 2 верх-слева (итал.), 3 верх-справа" },
+      "PieceStyle": { "name": "pieceStyle", "in": "query", "schema": { "type": "string", "enum": ["classic", "flat"], "default": "classic" } },
+      "Theme": { "name": "theme", "in": "query", "schema": { "type": "string", "enum": ["default", "lidraughts-brown", "lidraughts-blue", "green", "marble", "wood"], "default": "lidraughts-brown" } },
+      "White": { "name": "white", "in": "query", "schema": { "type": "string" }, "description": "Имя белых — включает полосу подписи" },
+      "Black": { "name": "black", "in": "query", "schema": { "type": "string" } },
+      "Comment": { "name": "comment", "in": "query", "schema": { "type": "string" }, "description": "Подпись на полосе; в GIF также пишется в метаданные" },
+      "Margin": { "name": "margin", "in": "query", "schema": { "type": "integer", "maximum": 64 } },
+      "Transparent": { "name": "transparent", "in": "query", "schema": { "type": "boolean", "default": false } }
+    },
+    "schemas": {
+      "GifRequest": { "type": "object", "required": ["frames"], "properties": {
+        "boardSize": { "type": "integer", "default": 10 },
+        "boardHeight": { "type": "integer" },
+        "lightSquares": { "type": "boolean" },
+        "numbering": { "type": "integer" },
+        "gameType": { "type": "integer" },
+        "variant": { "type": "string" },
+        "size": { "type": "integer", "default": 360, "maximum": 640 },
+        "theme": { "type": "string" },
+        "flat": { "type": "boolean" },
+        "orientation": { "type": "string", "enum": ["white", "black"] },
+        "delay_ms": { "type": "integer", "default": 700, "minimum": 100, "maximum": 3000 },
+        "white": { "type": "string" },
+        "black": { "type": "string" },
+        "frames": { "type": "array", "maxItems": 500, "items": { "type": "object", "required": ["fen"], "properties": { "fen": { "type": "string" }, "lastMove": { "type": "string", "example": "4741" } } } }
+      } }
+    }
+  }
+}
