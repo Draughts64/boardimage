@@ -47,7 +47,7 @@ fn golden_italian_light_squares() {
 
 #[test]
 fn golden_canadian_12x12() {
-    let p = params("W:W46-75:B1-30", 27, 640);
+    let p = params("W:W43-72:B1-30", 27, 640);
     let data = png(&p).unwrap();
     assert!(data.len() > 20 * 1024);
 }

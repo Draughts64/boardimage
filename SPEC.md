@@ -80,7 +80,7 @@ GET /board.png?fen=W:W31-50:B1-20&boardSize=10&size=1024
 GET /board.webp?fen=W:W25,K46:B10,19&boardSize=8&lastMove=4641&orientation=black
 GET /board.svg?fen=B:W23,32:B12&boardSize=10&arrows=2319,G32
 GET /board.png?fen=W:W21-32:B1-12&gameType=22&size=512        # итальянские
-GET /board.png?fen=W:W46-75:B1-30&gameType=27                 # канадские 12×12
+GET /board.png?fen=W:W43-72:B1-30&gameType=27                 # канадские 12×12
 GET /board.png?fen=W:W31-50:B1-20&gameType=20&notation=numeric&theme=green
 GET /board.png?fen=W:W21-32:B1-12&white=Иванов&black=Петров&comment=Москва 2026
 GET /board.webp?fen=W:W31-50:B1-20&squares=12,19:0.8&transparent=true
@@ -134,7 +134,7 @@ GET /board.webp?fen=W:W31-50:B1-20&squares=12,19:0.8&transparent=true
 | 24 | `spanish` | 8×8 | **СВЕТЛЫЕ**, 1 | `W:W21-32:B1-12` | ⏳ |
 | 25 | `russian` | 8×8 | тёмные, 0 | `W:W21-32:B1-12` | ✅ |
 | 26 | `brazilian` | 8×8 | тёмные, 0 | `W:W21-32:B1-12` | ✅ |
-| 27 | `canadian` | **12×12** | тёмные, 0 | `W:W46-75:B1-30` | ⏳ |
+| 27 | `canadian` | **12×12** | тёмные, 0 | `W:W43-72:B1-30` | ⏳ |
 | 28 | `portuguese` | 8×8 | **СВЕТЛЫЕ**, 1 | `W:W21-32:B1-12` | ⏳ |
 | 29 | `czech` | 8×8 | тёмные, 0 | `W:W21-32:B1-12` | ⏳ |
 | 30 | `turkish` | 8×8 | ВСЕ клетки (фигуры не на диагоналях!) | `W:W18-25,27-34:B3-10,12-19`* | ⏳ |

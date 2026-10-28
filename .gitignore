@@ -2,3 +2,5 @@
 Cargo.lock.bak
 *.png.given
 *.gif.given
+oa_check.json
+patch_server.py
