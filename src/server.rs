@@ -522,7 +522,7 @@ impl Server {
     }
 }
 
-fn parse_squares(s: &str, b: &board::BoardDef) -> Vec<(u16, f32)> {
+pub fn parse_squares(s: &str, b: &board::BoardDef) -> Vec<(u16, f32)> {
     s.split(',')
         .filter_map(|item| {
             let (sq, alpha) = match item.split_once(':') {
@@ -534,7 +534,7 @@ fn parse_squares(s: &str, b: &board::BoardDef) -> Vec<(u16, f32)> {
         .collect()
 }
 
-fn parse_arrows(s: &str, b: &board::BoardDef) -> Vec<Arrow> {
+pub fn parse_arrows(s: &str, b: &board::BoardDef) -> Vec<Arrow> {
     s.split(',')
         .filter(|i| !i.trim().is_empty())
         .filter_map(|item| {

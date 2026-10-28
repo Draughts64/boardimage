@@ -80,6 +80,12 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
         (l, d) => theme::with_colors(th, l, d),
     };
     let last_move = get("--last-move").and_then(|s| board::parse_move_squares(&s, &bdef));
+    let arrows = get("--arrows")
+        .map(|s| crate::server::parse_arrows(&s, &bdef))
+        .unwrap_or_default();
+    let squares = get("--squares")
+        .map(|s| crate::server::parse_squares(&s, &bdef))
+        .unwrap_or_default();
     let caption = {
         let w = get("--white").unwrap_or_default();
         let b = get("--black").unwrap_or_default();
@@ -127,13 +133,13 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
         }
         "svg" => {
             let pos = fen::parse(fens.first().unwrap(), &bdef)?;
-            let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
+            let p = mk_params(pos, bdef, size, th, last_move, arrows, squares, notation, caption, args);
             std::fs::write(&out, svg(&p)).map_err(|e| e.to_string())?;
         }
         "webp" => {
             use crate::render::webp;
             let pos = fen::parse(fens.first().unwrap(), &bdef)?;
-            let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
+            let p = mk_params(pos, bdef, size, th, last_move, arrows, squares, notation, caption, args);
             let quality: u8 = get("--quality")
                 .and_then(|q| q.parse().ok())
                 .unwrap_or(85)
@@ -142,7 +148,7 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
         }
         _ => {
             let pos = fen::parse(fens.first().unwrap(), &bdef)?;
-            let p = mk_params(pos, bdef, size, th, last_move, notation, caption, args);
+            let p = mk_params(pos, bdef, size, th, last_move, arrows, squares, notation, caption, args);
             std::fs::write(&out, png(&p)?).map_err(|e| e.to_string())?;
         }
     }
@@ -157,6 +163,8 @@ fn mk_params(
     size: u32,
     th: &'static theme::Theme,
     last_move: Option<(u16, u16)>,
+    arrows: Vec<crate::render::Arrow>,
+    squares: Vec<(u16, f32)>,
     notation: Notation,
     caption: Option<Caption>,
     args: &[String],
@@ -169,8 +177,8 @@ fn mk_params(
         flat: args.contains(&"--flat".to_string()),
         flipped: args.contains(&"--flip".to_string()),
         last_move,
-        squares: vec![],
-        arrows: vec![],
+        squares,
+        arrows,
         notation,
         margin: 0,
         transparent: args.contains(&"--transparent".to_string()),
