@@ -42,17 +42,20 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            src: boardimage
             asset: boardimage-linux-amd64
           - os: windows-latest
+            src: boardimage.exe
             asset: boardimage-windows-amd64.exe
           - os: macos-latest
+            src: boardimage
             asset: boardimage-macos-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      - run: mv target/release/boardimage* ${{ matrix.asset }}
+      - run: cp "target/release/${{ matrix.src }}" "${{ matrix.asset }}"
         shell: bash
       - uses: softprops/action-gh-release@v2
         with:
