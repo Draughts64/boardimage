@@ -27,10 +27,16 @@ or open [`demo/index.html`](demo/index.html) locally.
 | ![Canadian 12×12](demo/37-canadian-arrows.png) | ![Flipped](demo/39-flipped-arrows.png) | ![Formats](demo/09-formats.png) |
 | canadian 12×12 + arrows | black orientation + border | PNG 16.8K / WebP 7.3K / SVG 5K |
 
+**Chess is supported too** — dedicated page:
+[draughts64.github.io/boardimage/chess.html](https://draughts64.github.io/boardimage/chess.html)
+
+<img src="demo/46-chess-arrows.png" width="360" alt="Chess: arrows + cyrillic">
+
 Animated GIF replays with caption bars (cyrillic via the embedded
 DejaVu Sans font; the comment is also written into GIF metadata):
 
 <p>
+<img src="demo/52-chess-fools-mate.gif" width="280" alt="Fool's mate GIF">
 <img src="demo/44-italian-replay.gif" width="280" alt="Italian game GIF">
 <img src="demo/32-unicode-caption.gif" width="280" alt="Cyrillic GIF">
 <img src="demo/43-english-kings.gif" width="280" alt="King capture GIF">

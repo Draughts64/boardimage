@@ -27,10 +27,16 @@ Prometheus, OpenAPI/Swagger. Работает и как web-сервис, и к�
 | ![Канадские 12×12](demo/37-canadian-arrows.png) | ![Переворот чёрными](demo/39-flipped-arrows.png) | ![Форматы](demo/09-formats.png) |
 | канадские 12×12 + стрелки | ориентация чёрными + рамка | PNG 16.8К / WebP 7.3К / SVG 5К |
 
+**Шахматы тоже умеем** — отдельная страница:
+[draughts64.github.io/boardimage/chess.html](https://draughts64.github.io/boardimage/chess.html)
+
+<img src="demo/46-chess-arrows.png" width="360" alt="Шахматы: стрелки + кириллица">
+
 Анимация — GIF-реплеи с полосой подписей (кириллица встроенным шрифтом
 DejaVu Sans, комментарий пишется в метаданные файла):
 
 <p>
+<img src="demo/52-chess-fools-mate.gif" width="280" alt="Дурачий мат GIF">
 <img src="demo/44-italian-replay.gif" width="280" alt="Итальянская партия GIF">
 <img src="demo/32-unicode-caption.gif" width="280" alt="Кириллица в GIF">
 <img src="demo/43-english-kings.gif" width="280" alt="Бой королём GIF">
