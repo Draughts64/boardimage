@@ -42,6 +42,7 @@ DejaVu Sans, комментарий пишется в метаданные фа�
 cargo run                    # web: http://127.0.0.1:8080/healthz
 cargo run -- render ...      # CLI без сервера
 docker build -t boardimage . # прод-образ (~15 МБ)
+docker run -p 8080:8080 ghcr.io/draughts64/boardimage   # готовый из GHCR
 ```
 
 Окружение web-сервера: `BIND` (0.0.0.0:8080), `CACHE_MB` (LRU в памяти),

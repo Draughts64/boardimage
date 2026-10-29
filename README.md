@@ -42,6 +42,7 @@ DejaVu Sans font; the comment is also written into GIF metadata):
 cargo run                    # web: http://127.0.0.1:8080/healthz
 cargo run -- render ...      # CLI, no server
 docker build -t boardimage . # production image (~15 MB)
+docker run -p 8080:8080 ghcr.io/draughts64/boardimage   # prebuilt from GHCR
 ```
 
 Server environment: `BIND` (0.0.0.0:8080), `CACHE_MB` (in-memory LRU),
