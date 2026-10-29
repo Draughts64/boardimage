@@ -14,8 +14,9 @@ Prometheus, OpenAPI/Swagger. Работает и как web-сервис, и к�
 
 ## Демо
 
-Все примеры генерируются CLI из каталога [`demo/`](demo/) — открой
-[`demo/index.html`](demo/index.html) для галереи со всеми 45+ файлами.
+Все примеры генерируются CLI из каталога [`demo/`](demo/) —
+**[онлайн-галерея на GitHub Pages](https://draughts64.github.io/boardimage/)**
+или локально [`demo/index.html`](demo/index.html).
 
 | | | |
 |---|---|---|
