@@ -15,6 +15,7 @@ pub struct Frame {
 
 pub struct GifParams {
     pub board: BoardDef,
+    pub chess: bool,
     pub size: u32,
     pub theme: &'static theme::Theme,
     pub flat: bool,
@@ -59,9 +60,19 @@ pub fn encode(params: &GifParams, frames: &[Frame]) -> Result<Vec<u8>, String> {
 
     let mut ts = 0.0f64;
     for (i, f) in frames.iter().enumerate() {
-        let pos = fen::parse(&f.fen, &params.board).map_err(|e| e.to_string())?;
+        let pos = if params.chess {
+            // chess fens do not fit the draughts parser; use a stub
+            crate::fen::Position::default()
+        } else {
+            fen::parse(&f.fen, &params.board).map_err(|e| e.to_string())?
+        };
         let p = Params {
-            pos,
+            pieces: if params.chess {
+                crate::chess::parse(&f.fen).map_err(|e| e.to_string())?
+            } else {
+                crate::render::pieces_from_fen(&pos)
+            },
+            chess: params.chess.then(crate::theme::chess_set),
             board: params.board,
             size: params.size,
             theme: params.theme,

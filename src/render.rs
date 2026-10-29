@@ -6,6 +6,34 @@ use crate::glyph;
 use crate::theme::Theme;
 use tiny_skia::*;
 
+/// A piece placed on the board, game-agnostic: the sprite tag covers
+/// draughts ("wm","bm","wk","bk") and chess ("wK","wQ",...,"bP").
+#[derive(Debug, Clone, Copy)]
+pub struct BoardPiece {
+    pub square: u16,
+    pub white: bool,
+    pub king: bool, // vector fallback draws the crown
+    pub ghost: bool,
+    pub tag: &'static str,
+}
+
+pub fn pieces_from_fen(pos: &crate::fen::Position) -> Vec<BoardPiece> {
+    pos.pieces()
+        .map(|(white, p)| BoardPiece {
+            square: p.square,
+            white,
+            king: p.kind.is_king(),
+            ghost: p.kind.is_ghost(),
+            tag: match (white, p.kind.is_king()) {
+                (true, false) => "wm",
+                (true, true) => "wk",
+                (false, false) => "bm",
+                (false, true) => "bk",
+            },
+        })
+        .collect()
+}
+
 #[derive(Clone)]
 pub struct Arrow {
     pub from: u16,
@@ -22,7 +50,9 @@ pub struct Caption {
 
 #[derive(Clone)]
 pub struct Params {
-    pub pos: Position,
+    pub pieces: Vec<BoardPiece>,
+    /// chess: overrides the sprite set with the built-in cburnett pieces
+    pub chess: Option<&'static crate::theme::PieceSet>,
     pub board: BoardDef,
     pub size: u32, // square side in px
     pub theme: &'static Theme,
@@ -256,47 +286,59 @@ fn draw_board_raster(p: &Params, pm: &mut Pixmap) {
     }
 }
 
-fn draw_piece(pm: &mut Pixmap, p: &Params, white: bool, kind: Kind, cx: f32, cy: f32, s: f32) {
+fn draw_piece(pm: &mut Pixmap, p: &Params, pc: &BoardPiece, cx: f32, cy: f32, s: f32) {
     let base = s * 0.38;
-    let alpha = if kind.is_ghost() { 76 } else { 255 };
-    // custom theme piece sprites (SVG/PNG from the themes directory)
-    if let Some(set) = p.theme.pieces {
-        let man_idx = u8::from(!white);
-        let king_idx = 2 + u8::from(!white);
-        let (idx, want_crown) = if kind.is_king() && set.has(king_idx) {
-            (king_idx, false)
-        } else {
-            (man_idx, kind.is_king())
-        };
-        let side = (s * 0.9).ceil().max(1.0) as u32;
-        if let Some(sp) = set.sprite(idx, side) {
-            let paint = tiny_skia::PixmapPaint {
-                opacity: if kind.is_ghost() { 0.3 } else { 1.0 },
-                ..Default::default()
-            };
-            let x = (cx - side as f32 / 2.0).round() as i32;
-            let y = (cy - side as f32 / 2.0).round() as i32;
-            pm.draw_pixmap(
-                x,
-                y,
-                sp.as_ref().as_ref(),
-                &paint,
-                Transform::identity(),
-                None,
-            );
-            if want_crown {
-                draw_crown(pm, cx, cy, s, base, alpha);
+    let alpha = if pc.ghost { 76 } else { 255 };
+    // sprites: the chess set overrides, then theme pieces; chess tags
+    // that the theme does not define fall back to the built-in cburnett
+    let side = (s * 0.9).ceil().max(1.0) as u32;
+    let set = p.chess.or(p.theme.pieces);
+    let mut sprite = set.and_then(|set| set.sprite(pc.tag, side));
+    let mut want_crown = false;
+    if sprite.is_none() && p.chess.is_some() {
+        sprite = crate::theme::chess_set().sprite(pc.tag, side);
+    }
+    if sprite.is_none() {
+        if let Some(set) = set {
+            // draughts king without a dedicated sprite: man + crown
+            let man_tag = if pc.white { "wm" } else { "bm" };
+            if pc.king && set.has(if pc.white { "wk" } else { "bk" }) {
+                sprite = set.sprite(if pc.white { "wk" } else { "bk" }, side);
+            } else if set.has(man_tag) {
+                sprite = set.sprite(man_tag, side);
+                want_crown = pc.king;
             }
-            return;
         }
     }
+    if let Some(sp) = sprite {
+        let paint = tiny_skia::PixmapPaint {
+            opacity: if pc.ghost { 0.3 } else { 1.0 },
+            ..Default::default()
+        };
+        let x = (cx - side as f32 / 2.0).round() as i32;
+        let y = (cy - side as f32 / 2.0).round() as i32;
+        pm.draw_pixmap(
+            x,
+            y,
+            sp.as_ref().as_ref(),
+            &paint,
+            Transform::identity(),
+            None,
+        );
+        if want_crown {
+            draw_crown(pm, cx, cy, s, base, alpha);
+        }
+        return;
+    }
+    let white = pc.white;
+    let kind_is_king = pc.king;
     let (body, edge) = if white {
         ([255, 255, 255], [0, 0, 0])
     } else {
         ([0x1a, 0x1a, 0x1a], [0xdf, 0xdf, 0xdf])
     };
     // stack of discs: man = 2, king = 3 (visual height via offsets)
-    let rings: &[f32] = if kind.is_king() {
+    let rings: &[f32] = if kind_is_king {
         &[0.00, -0.07, -0.14]
     } else {
         &[0.00, -0.06]
@@ -346,7 +388,7 @@ fn draw_piece(pm: &mut Pixmap, p: &Params, white: bool, kind: Kind, cx: f32, cy:
             stroke_path(pm, &d, edge, s * 0.012);
         }
         // top cap for white kings
-        if kind.is_king() && white {
+        if kind_is_king && white {
             let d = disc_path(cx, cy - 0.14 * s, base);
             pm.fill_path(
                 &d,
@@ -357,7 +399,7 @@ fn draw_piece(pm: &mut Pixmap, p: &Params, white: bool, kind: Kind, cx: f32, cy:
             );
         }
     }
-    if kind.is_king() {
+    if kind_is_king {
         draw_crown(pm, cx, cy, s, base, alpha);
     }
 }
@@ -390,12 +432,12 @@ fn draw_crown(pm: &mut Pixmap, cx: f32, cy: f32, s: f32, base: f32, alpha: u8) {
 
 fn draw_pieces_raster(p: &Params, pm: &mut Pixmap) {
     let s = p.cell();
-    let mut items: Vec<_> = p.pos.pieces().collect();
-    items.sort_by_key(|(_, piece)| piece.square);
-    for (white, piece) in items {
-        if let Some((x, y)) = p.board.xy(piece.square) {
+    let mut items = p.pieces.clone();
+    items.sort_by_key(|pc| pc.square);
+    for pc in &items {
+        if let Some((x, y)) = p.board.xy(pc.square) {
             let (cx, cy) = p.center(x, y);
-            draw_piece(pm, p, white, piece.kind, cx, cy, s);
+            draw_piece(pm, p, pc, cx, cy, s);
         }
     }
 }
@@ -696,54 +738,61 @@ pub fn svg(p: &Params) -> String {
             );
         }
     }
-    let mut items: Vec<_> = p.pos.pieces().collect();
-    items.sort_by_key(|(_, piece)| piece.square);
-    for (white, piece) in items {
-        let Some((x, y)) = p.board.xy(piece.square) else {
+    let mut items = p.pieces.clone();
+    items.sort_by_key(|pc| pc.square);
+    for pc in items {
+        let Some((x, y)) = p.board.xy(pc.square) else {
             continue;
         };
         let (cx, cy) = p.center(x, y);
         let r = c * 0.38;
-        let op = if piece.kind.is_ghost() {
-            " opacity=\"0.3\""
-        } else {
-            ""
-        };
-        // custom theme piece sprites: embed the rasterised sprite
-        if let Some(set) = p.theme.pieces {
-            let man_idx = u8::from(!white);
-            let king_idx = 2 + u8::from(!white);
-            let (idx, want_crown) = if piece.kind.is_king() && set.has(king_idx) {
-                (king_idx, false)
-            } else {
-                (man_idx, piece.kind.is_king())
-            };
-            let side = (c * 0.9).ceil().max(1.0) as u32;
-            if let Some(sp) = set.sprite(idx, side) {
-                if let Ok(png) = sp.encode_png() {
-                    use base64::Engine as _;
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
-                    o += &format!(r#"<g{op}>"#);
-                    o += &format!(
-                        r##"<image x="{x}" y="{y}" width="{side}" height="{side}" href="data:image/png;base64,{b64}"/>"##,
-                        x = fmt(cx - side as f32 / 2.0),
-                        y = fmt(cy - side as f32 / 2.0),
-                    );
-                    if want_crown {
-                        o += &svg_crown(cx, cy, c, r);
-                    }
-                    o += "</g>";
-                    continue;
+        let op = if pc.ghost { " opacity=\"0.3\"" } else { "" };
+        // sprites: chess override, then theme; chess tags fall back to cburnett
+        let side = (c * 0.9).ceil().max(1.0) as u32;
+        let set = p.chess.or(p.theme.pieces);
+        let mut sprite = set.and_then(|set| set.sprite(pc.tag, side));
+        let mut want_crown = false;
+        if sprite.is_none() && p.chess.is_some() {
+            sprite = crate::theme::chess_set().sprite(pc.tag, side);
+        }
+        if sprite.is_none() {
+            if let Some(set) = set {
+                let man_tag = if pc.white { "wm" } else { "bm" };
+                let king_tag = if pc.white { "wk" } else { "bk" };
+                if pc.king && set.has(king_tag) {
+                    sprite = set.sprite(king_tag, side);
+                } else if set.has(man_tag) {
+                    sprite = set.sprite(man_tag, side);
+                    want_crown = pc.king;
                 }
             }
         }
+        if let Some(sp) = sprite {
+            if let Ok(png) = sp.encode_png() {
+                use base64::Engine as _;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+                o += &format!(r#"<g{op}>"#);
+                o += &format!(
+                    r##"<image x="{x}" y="{y}" width="{side}" height="{side}" href="data:image/png;base64,{b64}"/>"##,
+                    x = fmt(cx - side as f32 / 2.0),
+                    y = fmt(cy - side as f32 / 2.0),
+                );
+                if want_crown {
+                    o += &svg_crown(cx, cy, c, r);
+                }
+                o += "</g>";
+                continue;
+            }
+        }
+        let white = pc.white;
+        let is_king = pc.king;
         let (face, stroke) = if white {
             ("#ffffff", "#000000")
         } else {
             ("#1a1a1a", "#dfdfdf")
         };
         o += &format!(r#"<g{op}>"#);
-        let rings: &[f32] = if piece.kind.is_king() {
+        let rings: &[f32] = if is_king {
             &[0.0, -0.07, -0.14]
         } else {
             &[0.0, -0.06]
@@ -767,7 +816,7 @@ pub fn svg(p: &Params) -> String {
                 fmt(c * 0.012)
             );
         }
-        if piece.kind.is_king() {
+        if is_king {
             if white {
                 o += &format!(
                     r##"<circle cx="{}" cy="{}" r="{}" fill="{face}" stroke="{stroke}" stroke-width="{}"/>"##,

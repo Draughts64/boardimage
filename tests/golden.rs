@@ -6,7 +6,8 @@ use boardimage::{board, fen, theme};
 fn params(fen: &str, gt: u32, size: u32) -> Params {
     let (bdef, _) = board::from_game_type(gt).unwrap();
     Params {
-        pos: fen::parse(fen, &bdef).unwrap(),
+        pieces: boardimage::render::pieces_from_fen(&fen::parse(fen, &bdef).unwrap()),
+        chess: None,
         board: bdef,
         size,
         theme: theme::default_theme(),
@@ -82,6 +83,7 @@ fn golden_gif_sizes() {
     let data = encode(
         &GifParams {
             board: bdef,
+            chess: false,
             size: 512,
             theme: theme::default_theme(),
             flat: false,
@@ -115,6 +117,7 @@ fn golden_gif_comment_is_structurally_valid() {
     let data = encode(
         &GifParams {
             board: bdef,
+            chess: false,
             size: 256,
             theme: theme::default_theme(),
             flat: false,
@@ -337,5 +340,35 @@ fn golden_arrows_draughtsground_style() {
         edge.red(),
         edge.green(),
         edge.blue()
+    );
+}
+
+#[test]
+fn golden_chess_start_position() {
+    use boardimage::render::{raster, BoardPiece};
+    use boardimage::{chess, theme};
+    let pieces: Vec<BoardPiece> =
+        chess::parse("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+    assert_eq!(pieces.len(), 32);
+    let mut p = params("W:W1:B1", 20, 400); // board fields overridden below
+    p.board = chess::board();
+    p.pieces = pieces;
+    p.chess = Some(theme::chess_set());
+    let pm = raster(&p);
+    assert_eq!((pm.width(), pm.height()), (400, 400));
+    // pieces on both halves: kings on e1 (bottom) and e8 (top)
+    let cell = 50.0;
+    let e1 = pm.pixel((4.5 * cell) as u32, (7.5 * cell) as u32).unwrap();
+    let e8 = pm.pixel((4.5 * cell) as u32, (0.5 * cell) as u32).unwrap();
+    let (r1, g1, b1) = (e1.red(), e1.green(), e1.blue());
+    let (r8, g8, b8) = (e8.red(), e8.green(), e8.blue());
+    // light square is (255,206,158): both kings must differ strongly
+    assert!(
+        r1 < 150 || g1 < 130,
+        "white king visible on e1: {r1},{g1},{b1}"
+    );
+    assert!(
+        r8 < 150 || g8 < 130,
+        "black king visible on e8: {r8},{g8},{b8}"
     );
 }

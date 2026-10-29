@@ -33,6 +33,8 @@ struct GifRequest {
     all_squares: bool,
     #[serde(default, deserialize_with = "de_num_or_str")]
     game_type: Option<String>,
+    #[serde(default)]
+    game: Option<String>,
     variant: Option<String>,
     #[serde(default = "d_size")]
     size: u32,
@@ -296,7 +298,20 @@ impl Server {
     ) -> Result<(&'static str, Vec<u8>), String> {
         let bdef = Self::resolve_board(q)?;
         let fen_s = q.get("fen").ok_or("fen required")?;
-        let pos = fen::parse(fen_s, &bdef).map_err(|e| e.to_string())?;
+        let chess = q.get("game").is_some_and(|v| v == "chess");
+        let (pieces, chess_set) = if chess {
+            (
+                crate::chess::parse(fen_s).map_err(|e| e.to_string())?,
+                Some(crate::theme::chess_set()),
+            )
+        } else {
+            (
+                crate::render::pieces_from_fen(
+                    &fen::parse(fen_s, &bdef).map_err(|e| e.to_string())?,
+                ),
+                None,
+            )
+        };
         let size: u32 = q
             .get("size")
             .and_then(|s| s.parse().ok())
@@ -315,7 +330,8 @@ impl Server {
             (l, d) => theme::with_colors(th, l, d),
         };
         let params = Params {
-            pos,
+            pieces,
+            chess: chess_set,
             board: bdef,
             size,
             theme: th,
@@ -397,6 +413,9 @@ impl Server {
     }
 
     fn resolve_board(q: &HashMap<String, String>) -> Result<board::BoardDef, String> {
+        if q.get("game").is_some_and(|v| v == "chess") {
+            return Ok(crate::chess::board());
+        }
         let resolved = q
             .get("gameType")
             .and_then(|g| board::from_game_type_str(g))
@@ -511,6 +530,7 @@ impl Server {
                 .collect();
             let gparams = GifParams {
                 board: bdef,
+                chess: req.game.as_deref() == Some("chess"),
                 size,
                 theme: th,
                 flat: req.flat,
