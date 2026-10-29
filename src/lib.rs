@@ -4,6 +4,7 @@
 
 pub mod board;
 pub mod cache;
+pub mod chess;
 pub mod cli;
 pub mod fen;
 pub mod gif;

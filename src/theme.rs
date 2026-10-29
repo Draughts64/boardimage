@@ -26,38 +26,78 @@ pub enum PieceArt {
 }
 
 pub struct PieceSet {
-    // wm, bm, wk, bk; king slots fall back to the man sprite + crown
-    art: [Option<PieceArt>; 4],
-    cache: OnceLock<SpriteCache>,
+    // sprite name -> art: "wm".."bk" for draughts, "wK".."bP" for chess
+    art: HashMap<&'static str, PieceArt>,
+    cache: OnceLock<Mutex<HashMap<(&'static str, u32), Arc<tiny_skia::Pixmap>>>>,
 }
 
 impl PieceSet {
     pub fn new(wm: PieceArt, bm: PieceArt, wk: Option<PieceArt>, bk: Option<PieceArt>) -> Self {
+        let mut art = HashMap::new();
+        art.insert("wm", wm);
+        art.insert("bm", bm);
+        if let Some(a) = wk {
+            art.insert("wk", a);
+        }
+        if let Some(a) = bk {
+            art.insert("bk", a);
+        }
         Self {
-            art: [Some(wm), Some(bm), wk, bk],
+            art,
             cache: OnceLock::new(),
         }
     }
 
-    /// idx: 0 = white man, 1 = black man, 2 = white king, 3 = black
-    /// king. `size` is the sprite side in pixels.
-    pub fn sprite(&self, idx: u8, size: u32) -> Option<Arc<tiny_skia::Pixmap>> {
-        if size == 0 || idx > 3 {
+    /// `name` is the sprite tag ("wm", "wk", "wK", "bP", ...);
+    /// `size` is the sprite side in pixels.
+    pub fn sprite(&self, name: &str, size: u32) -> Option<Arc<tiny_skia::Pixmap>> {
+        if size == 0 {
             return None;
         }
+        let key = *self.art.keys().find(|&&k| k == name)?;
         let cache = self.cache.get_or_init(|| Mutex::new(HashMap::new()));
-        if let Some(p) = cache.lock().unwrap().get(&(idx, size)) {
+        if let Some(p) = cache.lock().unwrap().get(&(key, size)) {
             return Some(p.clone());
         }
-        let pm = render_art(self.art[idx as usize].as_ref()?, size)?;
+        let pm = render_art(self.art.get(key)?, size)?;
         let pm = Arc::new(pm);
-        cache.lock().unwrap().insert((idx, size), pm.clone());
+        cache.lock().unwrap().insert((key, size), pm.clone());
         Some(pm)
     }
 
-    pub fn has(&self, idx: u8) -> bool {
-        idx <= 3 && self.art[idx as usize].is_some()
+    pub fn has(&self, name: &str) -> bool {
+        self.art.keys().any(|k| *k == name)
     }
+}
+
+/// The built-in chess set: cburnett pieces embedded at compile time
+/// (see assets/pieces/cburnett/README.md for the licence note).
+pub fn chess_set() -> &'static PieceSet {
+    static SET: OnceLock<&'static PieceSet> = OnceLock::new();
+    SET.get_or_init(|| {
+        const ART: [(&'static str, &str); 12] = [
+            ("wK", include_str!("../assets/pieces/cburnett/wK.svg")),
+            ("wQ", include_str!("../assets/pieces/cburnett/wQ.svg")),
+            ("wR", include_str!("../assets/pieces/cburnett/wR.svg")),
+            ("wB", include_str!("../assets/pieces/cburnett/wB.svg")),
+            ("wN", include_str!("../assets/pieces/cburnett/wN.svg")),
+            ("wP", include_str!("../assets/pieces/cburnett/wP.svg")),
+            ("bK", include_str!("../assets/pieces/cburnett/bK.svg")),
+            ("bQ", include_str!("../assets/pieces/cburnett/bQ.svg")),
+            ("bR", include_str!("../assets/pieces/cburnett/bR.svg")),
+            ("bB", include_str!("../assets/pieces/cburnett/bB.svg")),
+            ("bN", include_str!("../assets/pieces/cburnett/bN.svg")),
+            ("bP", include_str!("../assets/pieces/cburnett/bP.svg")),
+        ];
+        let mut art = HashMap::new();
+        for (name, svg) in ART {
+            art.insert(name, PieceArt::Svg(svg.to_string()));
+        }
+        &*Box::leak(Box::new(PieceSet {
+            art,
+            cache: OnceLock::new(),
+        }))
+    })
 }
 
 fn render_art(art: &PieceArt, size: u32) -> Option<tiny_skia::Pixmap> {
@@ -348,15 +388,15 @@ mod tests {
             None,
             None,
         );
-        let sp = set.sprite(0, 16).unwrap();
+        let sp = set.sprite("wm", 16).unwrap();
         assert_eq!((sp.width(), sp.height()), (16, 16));
         let px = sp.pixel(8, 8).unwrap();
         assert_eq!((px.red(), px.green(), px.blue()), (255, 0, 0));
-        assert!(set.sprite(1, 16).is_none(), "broken art is None");
-        assert!(!set.has(2) && !set.has(3));
+        assert!(set.sprite("bm", 16).is_none(), "broken art is None");
+        assert!(!set.has("wk") && !set.has("bk"));
         // cached call returns the same allocation
         assert!(std::ptr::eq(
-            set.sprite(0, 16).unwrap().as_ref(),
+            set.sprite("wm", 16).unwrap().as_ref(),
             sp.as_ref()
         ));
     }
@@ -375,7 +415,7 @@ mod tests {
             None,
             None,
         );
-        let sp = set.sprite(0, 32).unwrap();
+        let sp = set.sprite("wm", 32).unwrap();
         let px = sp.pixel(16, 16).unwrap();
         assert_eq!((px.red(), px.green(), px.blue()), (0, 255, 0));
     }

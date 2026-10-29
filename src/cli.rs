@@ -15,6 +15,7 @@ const VALUE_FLAGS: &[&str] = &[
     "--out",
     "--fen",
     "--size",
+    "--game",
     "--game-type",
     "--variant",
     "--board-size",
@@ -131,6 +132,10 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
     if let Some(dir) = std::env::var("THEMES_DIR").ok().filter(|d| !d.is_empty()) {
         theme::load_dir(&dir);
     }
+    let chess = get("--game").as_deref() == Some("chess");
+    if chess {
+        bdef = board::BoardDef::from(crate::chess::board());
+    }
     let th = get("--theme")
         .and_then(|t| theme::by_name(&t))
         .unwrap_or_else(theme::default_theme);
@@ -156,6 +161,23 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
             black: b,
             comment: get("--comment").unwrap_or_default(),
         })
+    };
+    let pieces_of = |fs: &str| -> Result<
+        (
+            Vec<crate::render::BoardPiece>,
+            Option<&'static crate::theme::PieceSet>,
+        ),
+        String,
+    > {
+        if chess {
+            Ok((
+                crate::chess::parse(fs).map_err(|e| e.to_string())?,
+                Some(crate::theme::chess_set()),
+            ))
+        } else {
+            let pos = fen::parse(fs, &bdef)?;
+            Ok((crate::render::pieces_from_fen(&pos), None))
+        }
     };
     let mut margin: u32 = get("--margin")
         .and_then(|m| m.parse().ok())
@@ -193,6 +215,7 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
                 .collect();
             let data = crate::gif::encode(
                 &GifParams {
+                    chess,
                     board: bdef,
                     size: size.min(640),
                     theme: th,
@@ -209,19 +232,19 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
             std::fs::write(&out, data).map_err(|e| e.to_string())?;
         }
         "svg" => {
-            let pos = fen::parse(fens.first().unwrap(), &bdef)?;
+            let (pieces, set) = pieces_of(fens.first().unwrap())?;
             let p = mk_params(
-                pos, bdef, size, th, last_move, arrows, squares, notation, margin, border, caption,
-                args,
+                pieces, set, bdef, size, th, last_move, arrows, squares, notation, margin, border,
+                caption, args,
             );
             std::fs::write(&out, svg(&p)).map_err(|e| e.to_string())?;
         }
         "webp" => {
             use crate::render::webp;
-            let pos = fen::parse(fens.first().unwrap(), &bdef)?;
+            let (pieces, set) = pieces_of(fens.first().unwrap())?;
             let p = mk_params(
-                pos, bdef, size, th, last_move, arrows, squares, notation, margin, border, caption,
-                args,
+                pieces, set, bdef, size, th, last_move, arrows, squares, notation, margin, border,
+                caption, args,
             );
             let quality: u8 = get("--quality")
                 .and_then(|q| q.parse().ok())
@@ -230,10 +253,10 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
             std::fs::write(&out, webp(&p, quality)?).map_err(|e| e.to_string())?;
         }
         _ => {
-            let pos = fen::parse(fens.first().unwrap(), &bdef)?;
+            let (pieces, set) = pieces_of(fens.first().unwrap())?;
             let p = mk_params(
-                pos, bdef, size, th, last_move, arrows, squares, notation, margin, border, caption,
-                args,
+                pieces, set, bdef, size, th, last_move, arrows, squares, notation, margin, border,
+                caption, args,
             );
             std::fs::write(&out, png(&p)?).map_err(|e| e.to_string())?;
         }
@@ -243,8 +266,10 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn mk_params(
-    pos: fen::Position,
+    pieces: Vec<crate::render::BoardPiece>,
+    chess: Option<&'static crate::theme::PieceSet>,
     bdef: board::BoardDef,
     size: u32,
     th: &'static theme::Theme,
@@ -258,7 +283,8 @@ fn mk_params(
     args: &[String],
 ) -> Params {
     Params {
-        pos,
+        pieces,
+        chess,
         board: bdef,
         size,
         theme: th,
