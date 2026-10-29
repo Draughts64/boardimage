@@ -6,41 +6,60 @@
 [![Release](https://img.shields.io/github/v/release/Draughts64/boardimage)](https://github.com/Draughts64/boardimage/releases)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-Сервис рендера шашечных досок: **PNG / WebP / SVG** картинки позиций и
-**GIF-реплеи** партий. Rust, ноль состояния, двухуровневый кэш, метрики
-Prometheus, OpenAPI/Swagger. Работает и как web-сервис, и как CLI.
+Сервис рендера игровых досок: **шашки** (18 вариантов по PDN —
+международные, русские, итальянские, канадские, турецкие…) и
+**шахматы**. Картинки позиций **PNG / WebP / SVG** и **GIF-реплеи**
+партий. Rust, ноль состояния, двухуровневый кэш, метрики Prometheus,
+OpenAPI/Swagger. Работает и как web-сервис, и как CLI.
 
 Полное техническое задание: **[SPEC.md](SPEC.md)**.
 
 ## Демо
 
-Все примеры генерируются CLI из каталога [`demo/`](demo/) —
-**[онлайн-галерея на GitHub Pages](https://draughts64.github.io/boardimage/)**
-или локально [`demo/index.html`](demo/index.html).
+Всё генерируется CLI из каталога [`demo/`](demo/) —
+**[онлайн-галерея](https://draughts64.github.io/boardimage/)**,
+шахматная витрина отдельно:
+**[/chess.html](https://draughts64.github.io/boardimage/chess.html)**.
 
 | | | |
 |---|---|---|
-| ![Русские: номера+рамка+кириллица](demo/34-russian-full-combo.png) | ![Итальянские: светлые клетки](demo/38-italian-caption.png) | ![Турецкие: все 64 клетки](demo/36-turkish-wood-arrows.png) |
-| русские: номера 1..32 + рамка + тема | итальянские: светлые клетки + кириллица | турецкие: все клетки + спанциретти-дерево |
-| ![Анализ-борд](demo/33-analysis-engine.png) | ![Кастомная тема neon](demo/35-neon-numeric-border.png) | ![Стрелки](demo/16-arrows.png) |
-| анализ-борд: движковые стрелки + heatmap | кастомная тема (SVG-спрайты) | стрелки G/B/R/Y + круг |
+| ![Шахматы: стрелки + кириллица](demo/46-chess-arrows.png) | ![Анализ-борд шашек](demo/33-analysis-engine.png) | ![Русские: номера+рамка](demo/34-russian-full-combo.png) |
+| **шахматы**: стрелки UCI, lastMove, подписи | **шашки**: движковые стрелки + heatmap | русские: номера 1..32 + рамка + тема |
+| ![Итальянские: светлые клетки](demo/38-italian-caption.png) | ![Кастомная тема neon](demo/35-neon-numeric-border.png) | ![Турецкие: все клетки](demo/36-turkish-wood-arrows.png) |
+| итальянские: светлые клетки + кириллица | кастомная тема (SVG-спрайты) | турецкие: все 64 клетки |
 | ![Канадские 12×12](demo/37-canadian-arrows.png) | ![Переворот чёрными](demo/39-flipped-arrows.png) | ![Форматы](demo/09-formats.png) |
 | канадские 12×12 + стрелки | ориентация чёрными + рамка | PNG 16.8К / WebP 7.3К / SVG 5К |
-
-**Шахматы тоже умеем** — отдельная страница:
-[draughts64.github.io/boardimage/chess.html](https://draughts64.github.io/boardimage/chess.html)
-
-<img src="demo/46-chess-arrows.png" width="360" alt="Шахматы: стрелки + кириллица">
 
 Анимация — GIF-реплеи с полосой подписей (кириллица встроенным шрифтом
 DejaVu Sans, комментарий пишется в метаданные файла):
 
 <p>
-<img src="demo/52-chess-fools-mate.gif" width="280" alt="Дурачий мат GIF">
-<img src="demo/44-italian-replay.gif" width="280" alt="Итальянская партия GIF">
-<img src="demo/32-unicode-caption.gif" width="280" alt="Кириллица в GIF">
-<img src="demo/43-english-kings.gif" width="280" alt="Бой королём GIF">
+<img src="demo/52-chess-fools-mate.gif" width="280" alt="Шахматы: дурачий мат">
+<img src="demo/47-chess-opera.gif" width="280" alt="Шахматы: Оперная партия">
+<img src="demo/44-italian-replay.gif" width="280" alt="Шашки: итальянская партия">
 </p>
+
+## Шахматы
+
+`--game chess` (сервер: `?game=chess`) переключает сервис в шахматный
+режим:
+
+- обычный **шахматный FEN** по [PGN Standard §16.1.3](http://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm)
+  (`rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`);
+  счётчики полуходов можно опускать (EPD), рокировки Shredder-FEN
+  (`AHah`) принимаются, en-passant валидируется спекой;
+- встроенный набор фигур **cburnett** (растеризация под клетку,
+  кэширование, атрибуция лицензии в `assets/pieces/cburnett/`);
+- стрелки и lastMove в UCI (`Ge2e4`, `e2e4`), heatmap-подсветка, темы
+  доски, рамка a..h/1..8, координаты — всё из шашечного режима;
+- GIF-реплеи: `--game chess` + повторяемый `--fen` на каждую позицию.
+
+```bash
+boardimage render --game chess --arrows "Ge2e4,Bg1f3" --last-move e2e4 \
+  --white "Карлсен" --black "Каруана" --comment "WCh 2018" \
+  --fen "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1" \
+  --out m.png
+```
 
 ## Быстро
 
@@ -58,7 +77,11 @@ docker run -p 8080:8080 ghcr.io/draughts64/boardimage   # готовый из GH
 
 ```bash
 docker pull ghcr.io/draughts64/boardimage:latest
-docker run -d --name boardimage -p 8080:8080   -e CACHE_MB=256   -v boardimage_cache:/cache -e CACHE_DIR=/cache -e CACHE_MB_DISK=2048   -v ./my-themes:/themes:ro   ghcr.io/draughts64/boardimage:latest
+docker run -d --name boardimage -p 8080:8080 \
+  -e CACHE_MB=256 \
+  -v boardimage_cache:/cache -e CACHE_DIR=/cache -e CACHE_MB_DISK=2048 \
+  -v ./my-themes:/themes:ro \
+  ghcr.io/draughts64/boardimage:latest
 curl http://127.0.0.1:8080/healthz   # ok
 ```
 
@@ -77,26 +100,25 @@ curl http://127.0.0.1:8080/healthz   # ok
 (по умолчанию PNG). Неизвестный флаг — ошибка со списком разрешённых.
 
 ```bash
-# старт 10×10: числовые клетки, диапазоны, движковые :H0:F1 ок
+# шашки, старт 10×10: числовые клетки, диапазоны, движковые :H0:F1 ок
 boardimage render --fen "W:W31-50:B1-20:H0:F1" --out start.png --size 512
 
-# алгебраические клетки (a1..k10) — FEN из любого генератора; доска 8×8 english
-boardimage render --game-type 21 --fen \
-  "W:Wa3,g3,b2:Bb8,Kc3" --out pos.png
+# шашки, алгебраические клетки (a1..k10), доска 8×8 english
+boardimage render --game-type 21 --fen "W:Wa3,g3,b2:Bb8,Kc3" --out pos.png
 
-# полный PDN GameType-тег; нотация по умолчанию возьмётся из тега
+# шашки, полный PDN GameType-тег; нотация по умолчанию возьмётся из тега
 boardimage render --game-type "21,B,8,8,N1,0" --fen "B:W18,K10:B12,K22" --out e.svg
 
-# русские: номера на клетках + алгебраическая рамка + кириллица
+# шашки: номера на клетках + алгебраическая рамка + кириллица
 boardimage render --variant russian --notation numeric --margin 24 \
   --white "Сидорова А." --black "Кузнецов Д." --last-move 2521 \
   --fen "W:W21-32:B1-12" --out r.png
 
-# анализ-борд: стрелки движка + heatmap + lastMove
+# шашки, анализ-борд: стрелки движка + heatmap + lastMove
 boardimage render --arrows "4741,3228" --squares "23:0.7" --last-move 4741 \
   --comment "Движок: 47-41 (+1.2)" --fen "W:W36,K47:B5,23" --out a.png
 
-# GIF-реплей: --fen повторяется по кадрам
+# GIF-реплей (шашки или шахматы): --fen повторяется по кадрам
 boardimage render --variant russian --delay-ms 800 \
   --white "Сидорова Анна" --black "Кузнецов Д." --comment "Блиц" \
   --fen "W:W21-32:B1-12" --fen "W:W21-30,25,32:B1-12" \
@@ -105,6 +127,7 @@ boardimage render --variant russian --delay-ms 800 \
 
 | Флаг | Значение | По умолчанию |
 |---|---|---|
+| `--game chess` | шахматный режим (FEN + фигуры cburnett) | шашки |
 | `--fen <FEN>` | позиция; повторяйте для GIF-кадров | обязателен |
 | `--out <file>` | `.png` / `.svg` / `.webp` / `.gif` по расширению | обязателен |
 | `--size <16..1024>` | сторона картинки (GIF ≤640) | 512 |
@@ -118,8 +141,8 @@ boardimage render --variant russian --delay-ms 800 \
 | `--notation` | none / numeric / algebraic / coords | none |
 | `--margin <px>` | поля вокруг доски | 0 |
 | `--border` / `--no-border` | алгебраическая рамка (сочетается с numeric) | вкл при margin>0 |
-| `--last-move <m>` | `3228`, `32-28`, `c3-b4` — подсветка последнего хода | — |
-| `--arrows <csv>` | `G3228,R0622,44` — стрелки G/B/R/Y + круг | — |
+| `--last-move <m>` | `3228`, `32-28`, `c3-b4`, `e2e4` — подсветка хода | — |
+| `--arrows <csv>` | `G3228,R0622,44` / `Ge2e4` — стрелки + круг | — |
 | `--squares <csv>` | `46:0.9,12` — подсветка клеток с интенсивностью | — |
 | `--white` / `--black` | имена (Unicode/кириллица) — полоса подписи | — |
 | `--comment <текст>` | подпись; в GIF пишется в метаданные файла | — |
@@ -130,39 +153,43 @@ boardimage render --variant russian --delay-ms 800 \
 ## Web API (кратко — полностью в SPEC.md и /swagger)
 
 ```
+# шашки
 GET /board.png?fen=W:W31-50:B1-20&boardSize=10&size=1024
-GET /board.webp?fen=...&quality=85            # 100 = lossless
-GET /board.svg?fen=...&arrows=G0622,44
-GET /board.png?fen=W:Wa1,c1:Bb8&gameType=21   # алгебраический FEN
-GET /board.png?fen=...&gameType=22            # итальянские (светлые клетки)
-GET /board.png?fen=...&notation=numeric       # номера 1..50 у каждой клетки
-POST /game.gif   { "frames": [ {"fen": "...", "lastMove": "4741"} ] }
+GET /board.png?fen=W:Wa1,c1:Bb8&gameType=21        # алгебраический FEN
+GET /board.png?fen=...&gameType=22                 # итальянские (светлые клетки)
+GET /board.png?fen=...&notation=numeric            # номера 1..50 у каждой клетки
+# шахматы
+GET /board.png?game=chess&fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%20w%20KQkq%20-%200%201
+GET /board.webp?game=chess&fen=...&quality=85      # 100 = lossless
+GET /board.svg?fen=...&arrows=G0622,44             # стрелки как на analysis
+POST /game.gif   { "game": "chess", "frames": [ {"fen": "...", "lastMove": "e2e4"} ] }
 ```
 
 `GET /openapi.json` — машина; `/swagger` и `/redoc` — документация;
 `/metrics` — Prometheus; `/healthz` — живость.
 
-Шашечного движка в сервисе нет: партию проигрывает монолит
-[Draughts64/draughts](https://github.com/Draughts64/draughts) и
-присылает готовые кадры (архитектура lila-gif).
+Движка правил в сервисе нет: партию проигрывает клиент (монолит
+[Draughts64/draughts](https://github.com/Draughts64/draughts) для шашек
+— архитектура lila-gif) и присылает готовые кадры.
 
 ## FEN
 
-Принимается полный PDN 3.0 ([wiegerw.github.io/pdn/fen.html](https://wiegerw.github.io/pdn/fen.html)):
-ход `W`/`B`/`?`, списки клеток обеих сторон (можно пустые), префиксы
-`K` (король), `G`/`P` (призрачные; префиксы — только ЗАГЛАВНЫЕ, строчные
+**Шашки** — полный PDN 3.0 ([wiegerw.github.io/pdn/fen.html](https://wiegerw.github.io/pdn/fen.html)):
+ход `W`/`B`/`?`, списки обеих сторон (можно пустые), префиксы `K`
+(король), `G`/`P` (призрачные; префиксы — только ЗАГЛАВНЫЕ, строчные
 k/g — это файлы алгебраических имён), диапазоны `31-50`, движковые
 суффиксы `:H0:F1` пропускаются. Клетки задаются числами (канон
 движка/FMJD: клетка 1 сверху-слева, белые снизу) **или алгебраически**
-(`a1`, `Kc3`) — имена физические, ранг 1 снизу; на досках шириной 10
-буква `j` пропускается (`a…i,k`, chess-style `j` принимается как
-псевдоним `k`).
+(`a1`, `Kc3`); на досках шириной 10 буква `j` пропускается (`a…i,k`).
 
-Вариант доски задаётся `gameType` (число 20–41, 96–98 — или полный тег
-`"21,B,8,8,N1,0"`), `variant`-алиасом или парой `boardSize`/`boardHeight`
-(+ `lightSquares`, `allSquares`, `numbering`).
+**Шахматы** — стандартный FEN (см. секцию «Шахматы» выше): шесть полей,
+счётчики опциональны, en-passant только 3/6 ранг.
 
-## Кастомные темы (как у шахмат)
+Вариант шашечьей доски задаётся `gameType` (число 20–41, 96–98 — или
+полный тег `"21,B,8,8,N1,0"`), `variant`-алиасом или парой
+`boardSize`/`boardHeight` (+ `lightSquares`, `allSquares`, `numbering`).
+
+## Кастомные темы (как у шахматистов)
 
 Два способа задать свой дизайн:
 
@@ -181,15 +208,18 @@ THEMES_DIR=./themes boardimage render --theme neon --fen ... --out n.png
 Спрайты: `wm`/`bm` обязательны, `wk`/`bk` опциональны (упав — простая
 шашка + векторная корона); SVG растеризуется под размер клетки и
 кэшируется; призрачные шашки — opacity 0.3; в SVG-выводе спрайт
-встраивается как data-URI. Пример целиком: [`themes/neon/`](themes/neon).
+встраивается как data-URI. В шахматном режиме темы красят доску, а
+фигуры cburnett остаются (свои шахматные наборы — задел на будущее).
+Пример целиком: [`themes/neon/`](themes/neon).
 
 ## Статус и ограничения v1
 
-Полный рендер 18 вариантов по PDN GameType (итальянские светлые клетки,
+Шашки: 18 вариантов по PDN GameType (итальянские светлые клетки,
 канадские 12×12, турецкие все клетки, спанциретти 10×8), нумерация-канон
-движка lidraughts, стрелки/кольца/кисти как на analysis, Unicode-подписи
-встроенным шрифтом, 46 автотестов. Задокументированные упрощения: PNG
-полноцветный RGBA (palette-квантование не делается), формальный
+движка lidraughts. Шахматы: полный FEN + cburnett. Общее: стрелки/
+кольца/кисти как на analysis (порт draughtsground), Unicode-подписи,
+двухуровневый кэш + ETag, 53 автотеста. Задокументированные упрощения:
+PNG полноцветный RGBA (palette-квантование не делается), формальный
 нагрузочный тест не прогонялся.
 
 ## Лицензия
@@ -197,4 +227,5 @@ THEMES_DIR=./themes boardimage render --theme neon --fen ... --out n.png
 AGPL-3.0. API-контракт — из
 [niklasf/web-boardimage](https://github.com/niklasf/web-boardimage),
 приёмы GIF — из [lichess-org/lila-gif](https://github.com/lichess-org/lila-gif),
-шрифт подписей — DejaVu Sans (лицензия в `assets/`).
+шрифт подписей — DejaVu Sans (лицензия в `assets/`),
+шахматные фигуры — cburnett, GPL-2.0-or-later (`assets/pieces/cburnett/`).
