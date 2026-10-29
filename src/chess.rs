@@ -140,7 +140,7 @@ mod tests {
         assert!(p.iter().any(|pc| pc.square == 53 && pc.tag == "bP"));
         assert!(p
             .iter()
-            .any(|pc| pc.square == 57 && pc.tag == "bR" && pc.white == false));
+            .any(|pc| pc.square == 57 && pc.tag == "bR" && !pc.white));
         assert!(p.iter().any(|pc| pc.square == 5 && pc.tag == "wK")); // e1
     }
 

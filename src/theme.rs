@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
-type SpriteCache = Mutex<HashMap<(u8, u32), Arc<tiny_skia::Pixmap>>>;
+type SpriteCache = Mutex<HashMap<(&'static str, u32), Arc<tiny_skia::Pixmap>>>;
 type OverrideCache = Mutex<HashMap<([u8; 3], [u8; 3]), &'static Theme>>;
 
 #[derive(Clone, Copy)]
@@ -28,7 +28,7 @@ pub enum PieceArt {
 pub struct PieceSet {
     // sprite name -> art: "wm".."bk" for draughts, "wK".."bP" for chess
     art: HashMap<&'static str, PieceArt>,
-    cache: OnceLock<Mutex<HashMap<(&'static str, u32), Arc<tiny_skia::Pixmap>>>>,
+    cache: OnceLock<SpriteCache>,
 }
 
 impl PieceSet {
@@ -75,7 +75,7 @@ impl PieceSet {
 pub fn chess_set() -> &'static PieceSet {
     static SET: OnceLock<&'static PieceSet> = OnceLock::new();
     SET.get_or_init(|| {
-        const ART: [(&'static str, &str); 12] = [
+        const ART: [(&str, &str); 12] = [
             ("wK", include_str!("../assets/pieces/cburnett/wK.svg")),
             ("wQ", include_str!("../assets/pieces/cburnett/wQ.svg")),
             ("wR", include_str!("../assets/pieces/cburnett/wR.svg")),

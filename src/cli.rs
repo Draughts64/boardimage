@@ -134,7 +134,7 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
     }
     let chess = get("--game").as_deref() == Some("chess");
     if chess {
-        bdef = board::BoardDef::from(crate::chess::board());
+        bdef = crate::chess::board();
     }
     let th = get("--theme")
         .and_then(|t| theme::by_name(&t))
@@ -265,7 +265,6 @@ pub fn run_render(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
 fn mk_params(
     pieces: Vec<crate::render::BoardPiece>,

@@ -1,7 +1,7 @@
 // Rendering: raster (tiny-skia) and SVG from one geometry (SPEC.md §4).
 
 use crate::board::BoardDef;
-use crate::fen::{Kind, Position};
+use crate::fen;
 use crate::glyph;
 use crate::theme::Theme;
 use tiny_skia::*;
