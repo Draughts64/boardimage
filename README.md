@@ -45,9 +45,25 @@ docker build -t boardimage . # production image (~15 MB)
 docker run -p 8080:8080 ghcr.io/draughts64/boardimage   # prebuilt from GHCR
 ```
 
-Server environment: `BIND` (0.0.0.0:8080), `CACHE_MB` (in-memory LRU),
+## Docker
+
+Prebuilt images are published to GHCR on every push: `latest` (master)
+and version tags (`v0.1.0`, …).
+
+```bash
+docker pull ghcr.io/draughts64/boardimage:latest
+docker run -d --name boardimage -p 8080:8080   -e CACHE_MB=256   -v boardimage_cache:/cache -e CACHE_DIR=/cache -e CACHE_MB_DISK=2048   -v ./my-themes:/themes:ro   ghcr.io/draughts64/boardimage:latest
+curl http://127.0.0.1:8080/healthz   # ok
+```
+
+The image ships example themes (`/themes/neon`); mount your own over it.
+All variables: `BIND` (0.0.0.0:8080), `CACHE_MB` (in-memory LRU),
 `CACHE_DIR` + `CACHE_MB_DISK` (disk cache with size-based eviction),
-`THEMES_DIR` (custom themes directory).
+`THEMES_DIR` (themes directory, default `/themes`).
+
+> While the GHCR package is private, `docker pull` requires
+> `docker login ghcr.io` (a PAT with `read:packages`). Once the package
+> visibility is switched to public it works without login.
 
 ## CLI: `boardimage render`
 
