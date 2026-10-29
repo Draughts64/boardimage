@@ -2,6 +2,10 @@
 
 English | **[Русский](README.ru.md)**
 
+[![CI](https://github.com/Draughts64/boardimage/actions/workflows/ci.yml/badge.svg)](https://github.com/Draughts64/boardimage/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Draughts64/boardimage)](https://github.com/Draughts64/boardimage/releases)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+
 Draughts board rendering service: **PNG / WebP / SVG** position images
 and **GIF** game replays. Rust, stateless, two-tier cache, Prometheus
 metrics, OpenAPI/Swagger. Runs as a web service and as a CLI.

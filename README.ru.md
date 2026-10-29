@@ -2,6 +2,10 @@
 
 **[English](README.md)** | Русский
 
+[![CI](https://github.com/Draughts64/boardimage/actions/workflows/ci.yml/badge.svg)](https://github.com/Draughts64/boardimage/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Draughts64/boardimage)](https://github.com/Draughts64/boardimage/releases)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+
 Сервис рендера шашечных досок: **PNG / WebP / SVG** картинки позиций и
 **GIF-реплеи** партий. Rust, ноль состояния, двухуровневый кэш, метрики
 Prometheus, OpenAPI/Swagger. Работает и как web-сервис, и как CLI.
